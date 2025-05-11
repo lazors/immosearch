@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+
+# Build output
+dist/
+build/
+*.js.map
+
+# Debug files
+debug.png
+error-screenshot.png
+no-listings.png
+page-dump.html
+
+# Logs
+logs/
+*.log
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Project specific
+seenListings.json 

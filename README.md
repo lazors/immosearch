@@ -1,156 +1,225 @@
-# ImmoScout24 Automated Listing Checker
+# ImmoSearch - Automated Property Search
 
-An automated tool that monitors ImmoScout24 for new real estate listings based on your saved search filters and sends notifications to Telegram.
+An automated property search tool that monitors ImmoScout24 for new listings and sends notifications via Telegram.
 
 ## Features
 
-- 🔍 Monitors your saved ImmoScout24 search filters
-- 📱 Sends instant notifications to Telegram when new listings are found
-- 🤖 Simulates human-like behavior to avoid detection
-- 🔄 Configurable check intervals
-- 🛡️ Robust error handling and retry mechanisms
-- 📊 Keeps track of seen listings to avoid duplicates
+- 🔍 Automated property search on ImmoScout24
+- 📱 Telegram notifications for new listings
+- ⏰ Configurable check intervals
+- 🤖 Human-like browsing behavior
+- 📊 Detailed logging and monitoring
+- 🏠 Maintains history of seen listings
 
 ## Prerequisites
 
 - Node.js (v14 or higher)
-- A Telegram bot token
-- A saved search filter URL from ImmoScout24
+- npm
+- Telegram Bot Token
+- ImmoScout24 filter URL
 
-## Setup
+## Local Setup
 
-1. Clone this repository:
+1. Clone the repository:
 
-```bash
-git clone <your-repo-url>
-cd immosearch
-```
+   ```bash
+   git clone <repository-url>
+   cd immosearch
+   ```
 
 2. Install dependencies:
 
-```bash
-npm install
-```
+   ```bash
+   npm install
+   ```
 
-3. Create a `.env` file in the root directory with the following variables:
+3. Create a `.env` file with your configuration:
 
-```env
-IMMOSCOUT_FILTER_URL=your_saved_search_url_here
-TELEGRAM_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_IDS=chat_id1,chat_id2
-```
+   ```
+   TELEGRAM_TOKEN=your_telegram_bot_token
+   TELEGRAM_CHAT_IDS=your_chat_id,another_chat_id
+   IMMOSCOUT_FILTER_URL=your_immoscout_filter_url
+   ```
 
-### Getting Required Information
+4. Run the script:
 
-1. **ImmoScout24 Filter URL**:
+   ```bash
+   # Normal mode (uses .env)
+   ts-node check-immo-scout.ts
 
-   - Go to ImmoScout24 and set up your search filters
-   - Save the search
-   - Copy the URL of your saved search
+   # Interactive mode (prompts for values)
+   ts-node check-immo-scout.ts --interactive
+   ```
 
-2. **Telegram Bot Setup**:
-   - Create a new bot using [@BotFather](https://t.me/botfather) on Telegram
-   - Get the bot token
-   - Start a chat with your bot
-   - Get your chat ID (you can use [@userinfobot](https://t.me/userinfobot))
-   - Add the chat ID to the `TELEGRAM_CHAT_IDS` environment variable
+## Server Deployment (Oracle Cloud Free Tier)
 
-## Usage
+### 1. Oracle Cloud Setup
 
-1. Start the checker:
+1. Create Oracle Cloud Account:
 
-```bash
-npm start
-```
+   - Visit https://www.oracle.com/cloud/free/
+   - Click "Start for free"
+   - Complete registration (no credit card required)
 
-The script will:
+2. Create VM Instance:
+   - Log into Oracle Cloud Console
+   - Navigate to Compute → Instances
+   - Click "Create Instance"
+   - Choose "Always Free Eligible" resources
+   - Select Ubuntu 20.04 or 22.04
+   - Choose VM.Standard.E2.1.Micro (1GB RAM)
+   - Generate SSH key pair
+   - Click "Create"
 
-- Check for new listings every 5-8 minutes (configurable)
-- Send notifications to your Telegram chat when new listings are found
-- Keep track of seen listings to avoid duplicates
+### 2. Server Configuration
 
-## Launch Command
+1. Connect to your VM:
 
-To run the script, use one of the following commands:
+   ```bash
+   ssh ubuntu@<your-ip>
+   ```
 
-```bash
-# Using npm
-npm start
+2. Update system:
 
-```
+   ```bash
+   sudo apt update
+   sudo apt upgrade -y
+   ```
 
-### Running TypeScript File Directly
+3. Install required software:
+   ```bash
+   sudo apt install -y nodejs npm git nginx
+   ```
 
-To run the TypeScript file directly without compilation, you'll need to:
+### 3. Application Deployment
 
-1. Install ts-node globally:
+1. Clone and setup:
 
-```bash
-npm install -g ts-node typescript
-```
+   ```bash
+   git clone <repository-url>
+   cd immosearch
+   npm install
+   npm install -g pm2
+   ```
 
-2. Install required dependencies:
+2. Configure environment:
 
-```bash
-npm install playwright undici dotenv
-```
+   ```bash
+   # Create .env file
+   nano .env
+   # Add your configuration
+   ```
 
-3. Run the script:
+3. Start with PM2:
+   ```bash
+   pm2 start check-immo-scout.ts --interpreter="node" --interpreter-args="--loader ts-node/esm"
+   pm2 save
+   pm2 startup
+   ```
 
-```bash
-ts-node check-immo-scout.ts
-```
+### 4. Monitoring Setup (Prometheus + Grafana)
 
-Make sure you have all dependencies installed and your `.env` file configured before running the script.
+1. Install Prometheus:
 
-## Configuration
+   ```bash
+   wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+   tar xvfz prometheus-*.tar.gz
+   cd prometheus-*
+   ```
 
-You can modify the following settings in the code:
+2. Configure Prometheus:
 
-- `MIN_INTERVAL`: Minimum time between checks (default: 5 minutes)
-- `MAX_INTERVAL`: Maximum time between checks (default: 8 minutes)
-- `MAX_SEEN_IDS`: Number of recent listings to keep track of (default: 100)
-- `MAX_RETRIES`: Number of retry attempts for failed checks (default: 3)
+   ```bash
+   # Create prometheus.yml
+   nano prometheus.yml
+   ```
 
-## Debug Mode
+3. Install Grafana:
 
-To enable debug mode, set `DEBUG = true` in the code. This will:
+   ```bash
+   sudo apt-get install -y software-properties-common
+   sudo add-apt-repository "deb https://packages.grafana.com/oss/deb stable main"
+   sudo apt-get update
+   sudo apt-get install grafana
+   ```
 
-- Reduce check intervals to 10 seconds
-- Reduce human-like behavior delays
-- Send notifications only to the first chat ID in the list
+4. Start services:
+   ```bash
+   sudo systemctl start prometheus
+   sudo systemctl start grafana-server
+   sudo systemctl enable prometheus
+   sudo systemctl enable grafana-server
+   ```
 
-## Stopping the Script
+### 5. Access Monitoring
 
-Press `Ctrl+C` to stop the script. The script will perform a clean shutdown:
+1. Grafana Dashboard:
 
-- Close the browser instance
-- Save the current state
-- Exit gracefully
+   - Open http://<your-ip>:3000
+   - Default login: admin/admin
+   - Add Prometheus as data source
+   - Import dashboard for monitoring
+
+2. View Logs:
+   - Application logs: `pm2 logs`
+   - Debug logs: `tail -f debug.log`
+
+## Maintenance
+
+### Log Files
+
+- `debug.log`: Detailed operation logs
+- `seenListings.json`: History of seen listings (last 100)
+
+### Monitoring
+
+- Grafana Dashboard: Real-time monitoring
+- Prometheus: Metrics collection
+- PM2: Process management
+
+### Backup
+
+- Regular backups of `seenListings.json`
+- Grafana dashboard exports
+- PM2 process list
 
 ## Troubleshooting
 
-1. **No listings found**:
+1. Check application status:
 
-   - Verify your filter URL is correct
-   - Check if ImmoScout24 is accessible
-   - Ensure your search criteria are not too restrictive
+   ```bash
+   pm2 status
+   pm2 logs
+   ```
 
-2. **Telegram notifications not working**:
+2. Check monitoring:
 
-   - Verify your bot token is correct
-   - Ensure you've started a chat with your bot
-   - Check if the chat ID is correct
+   ```bash
+   sudo systemctl status prometheus
+   sudo systemctl status grafana-server
+   ```
 
-3. **Script crashes**:
-   - Check the console output for error messages
-   - Verify all environment variables are set correctly
-   - Ensure you have a stable internet connection
+3. View logs:
+   ```bash
+   tail -f debug.log
+   ```
+
+## Security Notes
+
+- Keep your `.env` file secure
+- Regularly update system packages
+- Monitor server resources
+- Use strong passwords for Grafana
+
+## Support
+
+For issues or questions:
+
+1. Check the debug.log file
+2. Review PM2 logs
+3. Check Grafana metrics
+4. Contact support
 
 ## License
 
-[Your chosen license]
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+ISC License

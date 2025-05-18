@@ -1,29 +1,30 @@
-# ImmoSearch - Automated Property Search
+# ImmoSearch
 
-An automated property search tool that monitors ImmoScout24 for new listings and sends notifications via Telegram.
+A TypeScript-based automation tool that monitors ImmoScout24 for new real estate listings and sends notifications to Telegram.
 
 ## Features
 
-- 🔍 Automated property search on ImmoScout24
-- 📱 Telegram notifications for new listings
-- ⏰ Configurable check intervals
-- 🤖 Human-like browsing behavior
-- 📊 Detailed logging and monitoring
-- 🏠 Maintains history of seen listings
+- 🔍 Monitors ImmoScout24 listings based on your saved search filters
+- 📱 Sends new listings directly to your Telegram chat
+- 🤖 Simulates human-like behavior to avoid detection
+- 🔄 Runs continuously with configurable check intervals
+- 🍪 Handles cookie consent automatically
+- 📝 Keeps track of seen listings to avoid duplicates
+- 🔧 Interactive mode for easy configuration
 
 ## Prerequisites
 
-- Node.js (v14 or higher)
-- npm
-- Telegram Bot Token
-- ImmoScout24 filter URL
+- Node.js (v20.9.0 or higher)
+- npm (v10.1.0 or higher)
+- A Telegram bot token
+- A saved search filter URL from ImmoScout24
 
-## Local Setup
+## Installation
 
 1. Clone the repository:
 
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/yourusername/immosearch.git
    cd immosearch
    ```
 
@@ -33,193 +34,82 @@ An automated property search tool that monitors ImmoScout24 for new listings and
    npm install
    ```
 
-3. Create a `.env` file with your configuration:
+3. Create a `.env` file in the project root with the following variables:
 
-   ```
+   ```env
    TELEGRAM_TOKEN=your_telegram_bot_token
-   TELEGRAM_CHAT_IDS=your_chat_id,another_chat_id
+   TELEGRAM_CHAT_IDS=your_chat_id1,your_chat_id2
    IMMOSCOUT_FILTER_URL=your_immoscout_filter_url
    ```
 
-4. Run the script:
+## Usage
 
-   ```bash
-   # Normal mode (uses .env)
-   ts-node check-immo-scout.ts
+### Interactive Mode
 
-   # Interactive mode (prompts for values)
-   ts-node check-immo-scout.ts --interactive
-   ```
+Run the script in interactive mode to configure it on the fly:
 
-## Server Deployment (Oracle Cloud Free Tier)
+```bash
+npx tsx check-immo-scout.ts --interactive
+```
 
-### 1. Oracle Cloud Setup
+or
 
-1. Create Oracle Cloud Account:
+```bash
+npx tsx check-immo-scout.ts -i
+```
 
-   - Visit https://www.oracle.com/cloud/free/
-   - Click "Start for free"
-   - Complete registration (no credit card required)
+### Non-Interactive Mode
 
-2. Create VM Instance:
-   - Log into Oracle Cloud Console
-   - Navigate to Compute → Instances
-   - Click "Create Instance"
-   - Choose "Always Free Eligible" resources
-   - Select Ubuntu 20.04 or 22.04
-   - Choose VM.Standard.E2.1.Micro (1GB RAM)
-   - Generate SSH key pair
-   - Click "Create"
+Run the script using environment variables:
 
-### 2. Server Configuration
+```bash
+npx tsx check-immo-scout.ts
+```
 
-1. Connect to your VM:
+## Configuration
 
-   ```bash
-   ssh ubuntu@<your-ip>
-   ```
+### Environment Variables
 
-2. Update system:
+- `TELEGRAM_TOKEN`: Your Telegram bot token
+- `TELEGRAM_CHAT_IDS`: Comma-separated list of Telegram chat IDs
+- `IMMOSCOUT_FILTER_URL`: Your saved ImmoScout24 search filter URL
 
-   ```bash
-   sudo apt update
-   sudo apt upgrade -y
-   ```
+### Check Intervals
 
-3. Install required software:
-   ```bash
-   sudo apt install -y nodejs npm git nginx
-   ```
+- Normal mode: Checks every 5-8 minutes
+- Debug mode: Checks every 10 seconds
 
-### 3. Application Deployment
+## Features in Detail
 
-1. Clone and setup:
+### Human-like Behavior
 
-   ```bash
-   git clone <repository-url>
-   cd immosearch
-   npm install
-   npm install -g pm2
-   ```
+- Random delays between actions
+- Natural mouse movements
+- Smooth scrolling
+- Realistic browser fingerprint
 
-2. Configure environment:
+### Listing Management
 
-   ```bash
-   # Create .env file
-   nano .env
-   # Add your configuration
-   ```
+- Tracks up to 100 seen listings
+- Automatically removes old listings
+- Prevents duplicate notifications
 
-3. Start with PM2:
-   ```bash
-   pm2 start check-immo-scout.ts --interpreter="node" --interpreter-args="--loader ts-node/esm"
-   pm2 save
-   pm2 startup
-   ```
+### Error Handling
 
-### 4. Monitoring Setup (Prometheus + Grafana)
+- Automatic retries on failure
+- Detailed error logging
+- Screenshot capture for debugging
 
-1. Install Prometheus:
+## Development
 
-   ```bash
-   wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
-   tar xvfz prometheus-*.tar.gz
-   cd prometheus-*
-   ```
+The project uses:
 
-2. Configure Prometheus:
-
-   ```bash
-   # Create prometheus.yml
-   nano prometheus.yml
-   ```
-
-3. Install Grafana:
-
-   ```bash
-   sudo apt-get install -y software-properties-common
-   sudo add-apt-repository "deb https://packages.grafana.com/oss/deb stable main"
-   sudo apt-get update
-   sudo apt-get install grafana
-   ```
-
-4. Start services:
-   ```bash
-   sudo systemctl start prometheus
-   sudo systemctl start grafana-server
-   sudo systemctl enable prometheus
-   sudo systemctl enable grafana-server
-   ```
-
-### 5. Access Monitoring
-
-1. Grafana Dashboard:
-
-   - Open http://<your-ip>:3000
-   - Default login: admin/admin
-   - Add Prometheus as data source
-   - Import dashboard for monitoring
-
-2. View Logs:
-   - Application logs: `pm2 logs`
-   - Debug logs: `tail -f debug.log`
-
-## Maintenance
-
-### Log Files
-
-- `debug.log`: Detailed operation logs
-- `seenListings.json`: History of seen listings (last 100)
-
-### Monitoring
-
-- Grafana Dashboard: Real-time monitoring
-- Prometheus: Metrics collection
-- PM2: Process management
-
-### Backup
-
-- Regular backups of `seenListings.json`
-- Grafana dashboard exports
-- PM2 process list
-
-## Troubleshooting
-
-1. Check application status:
-
-   ```bash
-   pm2 status
-   pm2 logs
-   ```
-
-2. Check monitoring:
-
-   ```bash
-   sudo systemctl status prometheus
-   sudo systemctl status grafana-server
-   ```
-
-3. View logs:
-   ```bash
-   tail -f debug.log
-   ```
-
-## Security Notes
-
-- Keep your `.env` file secure
-- Regularly update system packages
-- Monitor server resources
-- Use strong passwords for Grafana
-
-## Support
-
-For issues or questions:
-
-1. Check the debug.log file
-2. Review PM2 logs
-3. Check Grafana metrics
-4. Contact support
+- TypeScript for type safety
+- ES Modules for modern JavaScript
+- Playwright for browser automation
+- Inquirer for interactive CLI
+- Undici for HTTP requests
 
 ## License
 
-ISC License
+ISC

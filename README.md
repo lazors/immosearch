@@ -40,6 +40,7 @@ A TypeScript-based automation tool that monitors ImmoScout24 for new real estate
    TELEGRAM_TOKEN=your_telegram_bot_token
    TELEGRAM_CHAT_IDS=your_chat_id1,your_chat_id2
    IMMOSCOUT_FILTER_URL=your_immoscout_filter_url
+   DEBUG_TELEGRAM_ID=your_debug_chat_id  # Optional: for debug mode
    ```
 
 ## Usage

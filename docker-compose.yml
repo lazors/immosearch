@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  immo-checker-sl:
+    build: .
+    container_name: immo-checker-sl
+    env_file:
+      - .env
+    environment:
+      - INSTANCE_NAME=sl
+    volumes:
+      - ./data/instance1:/home/node/app/data
+      - ./src:/home/node/app/src
+      - ./nodemon.json:/home/node/app/nodemon.json
+    command: npx tsx check-immo-scout.ts
+    expose:
+      - '4000'
+    ports:
+      - '4000:4000'
+    restart: unless-stopped
+
+  immo-checker-in:
+    build: .
+    container_name: immo-checker-in
+    env_file:
+      - .env
+    environment:
+      - INSTANCE_NAME=in
+    volumes:
+      - ./data/instance2:/home/node/app/data
+      - ./src:/home/node/app/src
+      - ./nodemon.json:/home/node/app/nodemon.json
+    command: npx tsx check-immo-scout.ts
+    expose:
+      - '4001'
+    ports:
+      - '4001:4000'
+    restart: unless-stopped

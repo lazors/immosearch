@@ -103,8 +103,15 @@ async function main() {
   const TELEGRAM_CHAT_IDS = config.telegramChatIds;
 
   // 📁 Tracking seen listings
-  const SEEN_FILE = path.resolve(__dirname, 'seenListings.json');
-  const DEBUG_LOG_FILE = path.resolve(__dirname, 'debug.log');
+  const INSTANCE_NAME = process.env.INSTANCE_NAME || 'default';
+  const SEEN_FILE = path.resolve(
+    __dirname,
+    `data/seenListings.${INSTANCE_NAME}.json`
+  );
+  const DEBUG_LOG_FILE = path.resolve(
+    __dirname,
+    `data/debug.${INSTANCE_NAME}.log`
+  );
   const MAX_SEEN_IDS = 100;
   const REMOVE_COUNT = 70;
 
@@ -132,24 +139,24 @@ async function main() {
   let browserInstance: Browser | null = null;
   let pageInstance: any = null;
 
-  async function getBrowser() {
+  async function getBrowser(): Promise<Browser> {
     if (!browserInstance) {
       console.log('🚀 Launching new browser instance...');
       browserInstance = await chromium.launch({
-        headless: false,
-        slowMo: 50,
+        headless: true,
         args: [
           '--disable-blink-features=AutomationControlled',
-          '--disable-features=IsolateOrigins,site-per-process',
-          '--disable-site-isolation-trials',
-          '--window-size=1920,1080',
           '--disable-web-security',
-          '--disable-features=IsolateOrigins',
-          '--disable-site-isolation-trials',
-          '--disable-setuid-sandbox',
           '--no-sandbox',
-          '--ignore-certificate-errors',
-          '--ignore-certificate-errors-spki-list',
+          '--disable-setuid-sandbox',
+          '--window-size=1920,1080',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu',
+          '--lang=en-US,en',
         ],
       });
     }
@@ -158,73 +165,36 @@ async function main() {
 
   async function initializePage() {
     if (!pageInstance) {
-      console.log('🌐 Creating new page...');
       const browser = await getBrowser();
-      const context = await browser.newContext({
-        ignoreHTTPSErrors: true,
-        userAgent:
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        viewport: { width: 1920, height: 1080 },
-        deviceScaleFactor: 1,
-        hasTouch: false,
-        isMobile: false,
-        locale: 'de-DE',
-        timezoneId: 'Europe/Berlin',
-        permissions: ['geolocation'],
-        geolocation: { longitude: 13.404954, latitude: 52.520008 },
-        colorScheme: 'light',
-        reducedMotion: 'no-preference',
-        forcedColors: 'none',
-        acceptDownloads: true,
-        javaScriptEnabled: true,
-        extraHTTPHeaders: {
-          'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
-          Accept:
-            'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br',
-          Connection: 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
-          'Sec-Fetch-User': '?1',
-        },
+      pageInstance = await browser.newPage();
+
+      // Set a realistic user agent
+      await pageInstance.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        Connection: 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
       });
 
-      pageInstance = await context.newPage();
+      // Set a realistic viewport
+      await pageInstance.setViewportSize({ width: 1920, height: 1080 });
 
-      // Add error handling for page navigation
-      pageInstance.on('error', (err: Error) => {
-        console.error('❌ Page error:', err);
+      // Add random mouse movements to appear more human-like
+      await pageInstance.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5],
+        });
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['en-US', 'en'],
+        });
       });
-
-      pageInstance.on('pageerror', (err: Error) => {
-        console.error('❌ Page error:', err);
-      });
-
-      // Initial page load
-      console.log('🌐 Navigating to ImmoScout24...');
-      await pageInstance.goto(FILTER_URL, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
-
-      // Handle cookie consent
-      try {
-        console.log('🍪 Looking for cookie consent button...');
-        await pageInstance.waitForSelector(
-          '[data-testid="uc-accept-all-button"]',
-          {
-            timeout: 10000,
-          }
-        );
-        await randomDelay(500, 1500);
-        await pageInstance.click('[data-testid="uc-accept-all-button"]');
-        console.log('✅ Accepted cookies');
-        await randomDelay();
-      } catch (e) {
-        console.log('⚠️ Cookie button not found or already accepted');
-      }
     }
     return pageInstance;
   }
@@ -232,9 +202,9 @@ async function main() {
   // Debug logging function
   function logDebug(message: string) {
     const timestamp = new Date().toISOString();
-    const logMessage = `[${timestamp}] ${message}\n`;
+    const logMessage = `[${timestamp}] [${INSTANCE_NAME}] ${message}\n`;
     fs.appendFileSync(DEBUG_LOG_FILE, logMessage);
-    console.log(message);
+    console.log(`[${INSTANCE_NAME}] ${message}`);
   }
 
   function loadSeenListings(): Map<string, any> {
@@ -245,7 +215,9 @@ async function main() {
     try {
       const data = JSON.parse(fs.readFileSync(SEEN_FILE, 'utf-8'));
       logDebug(
-        `📁 Loaded ${Object.keys(data).length} listings from seenListings.json`
+        `📁 Loaded ${
+          Object.keys(data).length
+        } listings from seenListings.${INSTANCE_NAME}.json`
       );
       return new Map(Object.entries(data));
     } catch (error) {
@@ -285,7 +257,7 @@ async function main() {
       fs.writeFileSync(SEEN_FILE, JSON.stringify(listingsToSave, null, 2));
 
       logDebug(
-        `\n✅ Saved ${keptListings.length} listings to seenListings.json`
+        `\n✅ Saved ${keptListings.length} listings to seenListings.${INSTANCE_NAME}.json`
       );
       logDebug(
         `📅 Oldest kept listing: ${new Date(
@@ -360,8 +332,82 @@ async function main() {
     }
   }
 
+  // Function to check for CAPTCHA
+  async function isCaptchaPresent(page: any): Promise<boolean> {
+    try {
+      // Check for common CAPTCHA elements
+      const captchaSelectors = [
+        'iframe[src*="captcha"]',
+        'iframe[src*="recaptcha"]',
+        'div[class*="captcha"]',
+        'div[class*="recaptcha"]',
+        'form[action*="captcha"]',
+        'form[action*="recaptcha"]',
+      ];
+
+      for (const selector of captchaSelectors) {
+        const element = await page.$(selector);
+        if (element) {
+          logDebug('⚠️ CAPTCHA detected on the page');
+          return true;
+        }
+      }
+
+      // Check for CAPTCHA-related text
+      const pageContent = await page.content();
+      const captchaKeywords = [
+        'captcha',
+        'recaptcha',
+        'verify you are human',
+        'robot check',
+      ];
+      if (
+        captchaKeywords.some((keyword) =>
+          pageContent.toLowerCase().includes(keyword)
+        )
+      ) {
+        logDebug('⚠️ CAPTCHA-related text detected on the page');
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logDebug(`❌ Error checking for CAPTCHA: ${error}`);
+      return false;
+    }
+  }
+
+  // Function to handle CAPTCHA situation
+  async function handleCaptcha(page: any): Promise<boolean> {
+    logDebug('🔄 Handling CAPTCHA situation...');
+
+    // Take a screenshot for debugging
+    const screenshotPath = path.join(__dirname, 'captcha-screenshot.png');
+    await page.screenshot({ path: screenshotPath });
+    logDebug(`📸 Captured CAPTCHA screenshot at: ${screenshotPath}`);
+
+    // Send notification about CAPTCHA
+    await sendTelegramMessage(
+      '⚠️ CAPTCHA detected! Please check the screenshot and handle it manually.'
+    );
+
+    // Close the current page and browser instance
+    if (pageInstance) {
+      await pageInstance.close();
+      pageInstance = null;
+    }
+    if (browserInstance) {
+      await browserInstance.close();
+      browserInstance = null;
+    }
+
+    return false;
+  }
+
+  // Modify the checkFilteredPage function to include CAPTCHA handling
   async function checkFilteredPage() {
     let retryCount = 0;
+    const page = await initializePage();
 
     while (retryCount < MAX_RETRIES) {
       try {
@@ -371,169 +417,115 @@ async function main() {
         );
         console.log('==========================================');
 
-        const page = await initializePage();
-
         // Force a fresh page load
         console.log('\n==========================================');
         console.log('🔄 REFRESHING PAGE');
         console.log('==========================================');
 
-        try {
-          // Use the existing page to navigate
-          await page.goto(FILTER_URL, {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000,
-          });
+        await page.goto(FILTER_URL, {
+          waitUntil: 'networkidle',
+          timeout: 30000,
+        });
 
-          console.log('==========================================');
-          console.log('✅ PAGE REFRESHED');
-          console.log('==========================================\n');
-
-          // Wait for the page to fully load
-          await page.waitForTimeout(2000);
-
-          // ✅ Wait for listings
-          console.log('🔍 Waiting for listings to load...');
-          const listingSelector = '[data-testid$="-slide-0"]';
-
-          // Wait for the "Suche speichern" button to be visible
-          console.log(
-            '⏳ Waiting for page to load (looking for "Suche speichern" button)...'
-          );
-          await page.waitForSelector('#saveSearchHeaderLink', {
-            timeout: 15000,
-          });
-          console.log('✅ Page loaded successfully');
-
-          // Wait for listings
-          console.log('⏳ Waiting for listings...');
-          await page.waitForSelector(listingSelector, { timeout: 15000 });
-          console.log('✅ Listings container found');
-
-          // Get all listing elements
-          console.log('🔍 Finding all listings...');
-          const listings = await page.$$(listingSelector);
-          console.log(`📊 Found ${listings.length} listings on the page`);
-
-          if (listings.length === 0) {
-            console.error('❌ No listings found!');
-            console.log('📸 Taking screenshot for debugging...');
-            await page.screenshot({ path: 'no-listings.png' });
-            throw new Error('No listings found on the page');
+        // Check for CAPTCHA
+        if (await isCaptchaPresent(page)) {
+          const handled = await handleCaptcha(page);
+          if (!handled) {
+            retryCount++;
+            if (retryCount === MAX_RETRIES) {
+              throw new Error('Max retries reached after CAPTCHA detection');
+            }
+            console.log(
+              `🔄 Retrying after CAPTCHA... (${retryCount}/${MAX_RETRIES})`
+            );
+            await new Promise((resolve) =>
+              setTimeout(resolve, INITIAL_RETRY_DELAY * Math.pow(2, retryCount))
+            );
+            continue;
           }
+        }
 
-          const seen = loadSeenListings();
-          const newSeen = new Map(seen);
-          const newListings: string[] = [];
+        console.log('==========================================');
+        console.log('✅ PAGE REFRESHED');
+        console.log('==========================================\n');
 
-          console.log(`📚 Loaded ${seen.size} seen listings from JSON`);
-          console.log('🔍 Checking for new listings...');
+        // Wait for the page to fully load
+        await page.waitForLoadState('networkidle');
+        await randomDelay(2000, 4000);
 
-          // Process each listing
-          for (const listing of listings) {
-            try {
-              const dataTestId = await listing.getAttribute('data-testid');
-              if (!dataTestId) {
-                console.log('⚠️ Skipping listing without data-testid');
-                continue;
-              }
+        // Perform human-like scrolling
+        await humanLikeScroll(page);
+        await randomDelay(1000, 2000);
 
-              const id = dataTestId.split('-')[0];
-              console.log(`\n📝 Processing listing ID: ${id}`);
+        // Get all listing elements
+        const listings = await page.$$('[data-testid="result-list-item"]');
+        console.log(`📊 Found ${listings.length} listings on the page`);
 
-              const isNew = !seen.has(id);
-              console.log(
-                `🔍 Listing ${id} is ${isNew ? 'NEW' : 'already seen'}`
+        // Load seen listings
+        const seen = loadSeenListings();
+        const newListings: string[] = [];
+
+        console.log(`📚 Loaded ${seen.size} seen listings from JSON`);
+        console.log('🔍 Checking for new listings...');
+
+        // Process each listing
+        for (const listing of listings) {
+          try {
+            const id = await listing.getAttribute('data-id');
+            if (!id) continue;
+
+            if (!seen.has(id)) {
+              const title = await listing.$eval(
+                '[data-testid="result-list-item-title"]',
+                (el: Element) => el.textContent?.trim() || ''
+              );
+              const price = await listing.$eval(
+                '[data-testid="result-list-item-price"]',
+                (el: Element) => el.textContent?.trim() || ''
+              );
+              const location = await listing.$eval(
+                '[data-testid="result-list-item-location"]',
+                (el: Element) => el.textContent?.trim() || ''
+              );
+              const url = await listing.$eval(
+                'a',
+                (el: HTMLAnchorElement) => el.href
               );
 
-              if (isNew) {
-                console.log(`🆕 Found new listing: ${id}`);
+              const message = `
+🏠 New Listing Found!
+📌 Title: ${title}
+💰 Price: ${price}
+📍 Location: ${location}
+🔗 URL: ${url}
+              `;
 
-                const link = await listing.$('xpath=ancestor::a');
-                if (!link) {
-                  console.log('⚠️ No link found for listing, skipping...');
-                  continue;
-                }
-
-                const href = await link.getAttribute('href');
-                if (!href) {
-                  console.log('⚠️ No href found for listing, skipping...');
-                  continue;
-                }
-
-                const fullUrl = href.startsWith('http')
-                  ? href
-                  : `https://www.immobilienscout24.de${href}`;
-
-                newListings.push(fullUrl);
-
-                const listingData = {
-                  id,
-                  url: fullUrl,
-                  timestamp: new Date().toISOString(),
-                };
-                newSeen.set(id, listingData);
-                console.log(
-                  `✅ Added new listing to seen listings:`,
-                  listingData
-                );
-              } else {
-                const seenData = seen.get(id);
-                console.log(
-                  `⏭️ Skipping already seen listing: ${id} (seen at ${seenData?.timestamp})`
-                );
-              }
-            } catch (error) {
-              console.error(`❌ Error processing listing:`, error);
-              continue;
-            }
-          }
-
-          // Save updated seen listings
-          console.log(
-            `\n💾 Saving ${newSeen.size} listings to seenListings.json...`
-          );
-          saveSeenListings(newSeen);
-          console.log('✅ Seen listings saved successfully');
-
-          // Send new listings to Telegram
-          if (newListings.length > 0) {
-            console.log(
-              `\n📤 Sending ${newListings.length} new listings to Telegram...`
-            );
-            const message = [
-              '🆕 Neue Wohnungen gefunden:',
-              '',
-              ...newListings,
-              '',
-              'Viel Erfolg bei der Wohnungssuche! 🍀',
-            ].join('\n');
-
-            if (DEBUG) {
-              await sendTelegramMessage(message, DEBUG_TELEGRAM_ID);
-            } else {
               await sendTelegramMessage(message);
+              newListings.push(id);
+              seen.set(id, { timestamp: new Date().toISOString(), url });
             }
-            console.log(
-              `✅ Sent ${newListings.length} new listings to Telegram`
-            );
-          } else {
-            console.log('\n📭 No new listings found.');
+          } catch (error) {
+            console.error('❌ Error processing listing:', error);
           }
-
-          break;
-        } catch (error) {
-          console.error('❌ Error during page check:', error);
-          retryCount++;
-          if (retryCount === MAX_RETRIES) {
-            throw error;
-          }
-          console.log(`🔄 Retrying... (${retryCount}/${MAX_RETRIES})`);
-          await new Promise((resolve) => setTimeout(resolve, 5000));
         }
+
+        // Save updated seen listings
+        saveSeenListings(seen);
+
+        console.log(
+          `\n✅ Check completed. Found ${newListings.length} new listings.`
+        );
+        return true;
       } catch (error) {
-        console.error('❌ Check failed:', error);
-        throw error;
+        console.error('❌ Error during page check:', error);
+        retryCount++;
+        if (retryCount === MAX_RETRIES) {
+          throw error;
+        }
+        console.log(`🔄 Retrying... (${retryCount}/${MAX_RETRIES})`);
+        await new Promise((resolve) =>
+          setTimeout(resolve, INITIAL_RETRY_DELAY * Math.pow(2, retryCount))
+        );
       }
     }
   }

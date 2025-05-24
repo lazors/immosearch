@@ -4,6 +4,7 @@ package-lock.json
 
 # Environment variables
 .env
+.env.*
 
 # Build output
 dist/
@@ -32,4 +33,5 @@ Thumbs.db
 *.tsbuildinfo
 
 # Project specific
-seenListings.json 
+seenListings.json
+seenListings.*.json

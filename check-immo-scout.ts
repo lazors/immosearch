@@ -103,10 +103,24 @@ async function main() {
   const TELEGRAM_CHAT_IDS = config.telegramChatIds;
 
   // 📁 Tracking seen listings
-  const SEEN_FILE = path.resolve(__dirname, 'seenListings.json');
-  const DEBUG_LOG_FILE = path.resolve(__dirname, 'debug.log');
+  const INSTANCE_NAME = process.env.INSTANCE_NAME || 'default';
+  const SEEN_FILE = path.resolve(
+    __dirname,
+    `seenListings.${INSTANCE_NAME}.json`
+  );
+  const DEBUG_LOG_FILE = path.resolve(__dirname, `debug.${INSTANCE_NAME}.log`);
   const MAX_SEEN_IDS = 100;
   const REMOVE_COUNT = 70;
+
+  // Create data directory if it doesn't exist
+  const DATA_DIR = path.resolve(__dirname, 'data');
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  function getServiceSpecificFile(service: string): string {
+    return path.join(DATA_DIR, `${service}_listings.${INSTANCE_NAME}.json`);
+  }
 
   // 🔄 Retry configuration
   const MAX_RETRIES = 3;
@@ -238,14 +252,17 @@ async function main() {
   }
 
   function loadSeenListings(): Map<string, any> {
-    if (!fs.existsSync(SEEN_FILE)) {
-      logDebug('📁 No seen listings file found, starting fresh');
+    const serviceFile = getServiceSpecificFile('immoscout');
+    if (!fs.existsSync(serviceFile)) {
+      logDebug(
+        `📁 No seen listings file found for instance ${INSTANCE_NAME}, starting fresh`
+      );
       return new Map();
     }
     try {
-      const data = JSON.parse(fs.readFileSync(SEEN_FILE, 'utf-8'));
+      const data = JSON.parse(fs.readFileSync(serviceFile, 'utf-8'));
       logDebug(
-        `📁 Loaded ${Object.keys(data).length} listings from seenListings.json`
+        `📁 Loaded ${Object.keys(data).length} listings from ${serviceFile}`
       );
       return new Map(Object.entries(data));
     } catch (error) {
@@ -256,6 +273,7 @@ async function main() {
 
   function saveSeenListings(listings: Map<string, any>) {
     try {
+      const serviceFile = getServiceSpecificFile('immoscout');
       // Convert to array and sort by timestamp
       const allListings = Array.from(listings.entries());
       const sortedListings = allListings.sort((a, b) => {
@@ -282,11 +300,9 @@ async function main() {
       // Keep only the newest MAX_SEEN_IDS
       const keptListings = sortedListings.slice(0, MAX_SEEN_IDS);
       const listingsToSave = Object.fromEntries(keptListings);
-      fs.writeFileSync(SEEN_FILE, JSON.stringify(listingsToSave, null, 2));
+      fs.writeFileSync(serviceFile, JSON.stringify(listingsToSave, null, 2));
 
-      logDebug(
-        `\n✅ Saved ${keptListings.length} listings to seenListings.json`
-      );
+      logDebug(`\n✅ Saved ${keptListings.length} listings to ${serviceFile}`);
       logDebug(
         `📅 Oldest kept listing: ${new Date(
           keptListings[keptListings.length - 1][1].timestamp
@@ -299,7 +315,7 @@ async function main() {
       );
 
       // Log file size
-      const stats = fs.statSync(SEEN_FILE);
+      const stats = fs.statSync(serviceFile);
       logDebug(`📊 File size: ${(stats.size / 1024).toFixed(2)} KB`);
     } catch (error) {
       logDebug(`❌ Error saving seen listings: ${error}`);

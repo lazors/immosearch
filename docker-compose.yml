@@ -8,11 +8,21 @@ services:
       - .env
     environment:
       - INSTANCE_NAME=sl
+      - DISPLAY=:99
     volumes:
       - ./data/instance1:/home/node/app/data
       - ./src:/home/node/app/src
       - ./nodemon.json:/home/node/app/nodemon.json
-    command: npx tsx check-immo-scout.ts
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    privileged: true  # Required for dbus
+    command: >
+      bash -c "
+        mkdir -p /var/run/dbus &&
+        dbus-daemon --system --fork &&
+        Xvfb :99 -screen 0 1920x1080x24 -ac &
+        sleep 2 &&
+        node --no-warnings --loader ts-node/esm check-immo-scout.ts
+      "
     expose:
       - '4000'
     ports:

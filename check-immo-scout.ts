@@ -127,7 +127,7 @@ async function main() {
   const INITIAL_RETRY_DELAY = 5000; // 5 seconds
 
   // Debug configuration
-  const DEBUG = false;
+  const DEBUG = true;
   const DEBUG_TELEGRAM_ID = process.env.DEBUG_TELEGRAM_ID || '';
 
   // Check interval configuration (in milliseconds)

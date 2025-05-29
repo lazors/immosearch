@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+CreateClient
+ListOfferings
+
+GeneratePom {
+  url: "https://github.com/login"
+}
+
+GenerateFeature {
+  url: "https://github.com/login"
+}
+
+GenerateTest {
+  url: "https://github.com/login"
+}
+
+SelfHealingLocators
+BugReportGenerator
+TestGapIdentifier {
+  baseBranch: "main"
+}
+
+VisualFlakinessAnalyzer
+ChangeAwareTestGenerator
+NaturalLanguageBugReporter

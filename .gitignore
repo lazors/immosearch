@@ -35,3 +35,5 @@ Thumbs.db
 # Project specific
 seenListings.json
 seenListings.*.json
+
+data

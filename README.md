@@ -67,6 +67,82 @@ Run the script using environment variables:
 npx tsx check-immo-scout.ts
 ```
 
+### Explore All Pages Mode
+
+By default, the bot only checks the first page of your filter results. To explore ALL pages of your filter (useful for comprehensive searches), use the explore all pages flag:
+
+```bash
+npx tsx check-immo-scout.ts --explore-all
+```
+
+or
+
+```bash
+npx tsx check-immo-scout.ts -e
+```
+
+You can also combine it with interactive mode:
+
+```bash
+npx tsx check-immo-scout.ts --interactive --explore-all
+```
+
+**Note:** Explore all pages mode will:
+
+- Navigate through every page of your filter results
+- Check the pagination button status to determine when to stop
+- Take longer to complete but finds listings from all pages
+- Add a "page" field to tracked listings for better organization
+
+### Using Different Environment Files
+
+You can specify a custom environment file using the `--env` or `--env-file` flag:
+
+```bash
+npx tsx check-immo-scout.ts --env .env.production
+```
+
+```bash
+npx tsx check-immo-scout.ts --env-file .env.staging
+```
+
+This is useful for:
+- **Multiple instances**: Different configurations for different searches
+- **Different environments**: Separate configs for testing vs production
+- **Multiple locations**: Different filter URLs for different cities
+
+#### Example Environment Files:
+
+**.env.berlin** (for Berlin apartments):
+```env
+TELEGRAM_TOKEN=your_bot_token
+TELEGRAM_CHAT_IDS=123456789
+IMMOSCOUT_FILTER_URL=https://www.immobilienscout24.de/Suche/de/berlin/...
+INSTANCE_NAME=berlin
+```
+
+**.env.munich** (for Munich apartments):
+```env
+TELEGRAM_TOKEN=your_bot_token
+TELEGRAM_CHAT_IDS=987654321
+IMMOSCOUT_FILTER_URL=https://www.immobilienscout24.de/Suche/de/muenchen/...
+INSTANCE_NAME=munich
+```
+
+Then run them separately:
+```bash
+npx tsx check-immo-scout.ts --env .env.berlin
+npx tsx check-immo-scout.ts --env .env.munich --explore-all
+```
+
+### Combining Flags
+
+You can combine multiple flags:
+
+```bash
+npx tsx check-immo-scout.ts --interactive --explore-all --env .env.custom
+```
+
 ## Configuration
 
 ### Environment Variables

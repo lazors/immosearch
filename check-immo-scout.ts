@@ -20,7 +20,7 @@ const runOnce = args.includes('--once') || args.includes('-o');
 // Show help and exit if requested
 if (showHelp) {
   console.log(`
-🏠 ImmoSearch - ImmoScout24 Telegram Bot
+🏠 ImmoSearch - Multi-Platform Real Estate Telegram Bot
 
 Usage: npx tsx check-immo-scout.ts [options]
 
@@ -43,9 +43,12 @@ Examples:
 Environment Variables:
   TELEGRAM_TOKEN        Your Telegram bot token (required)
   TELEGRAM_CHAT_IDS     Comma-separated chat IDs (required)
-  IMMOSCOUT_FILTER_URL  Your ImmoScout24 filter URL (required)
+  IMMOSCOUT_FILTER_URL  Your ImmoScout24 filter URL (optional)
+  KLEINANZEIGEN_FILTER_URL  Your Kleinanzeigen filter URL (optional)
   INSTANCE_NAME         Instance name for file naming (optional, default: 'default')
   DEBUG_TELEGRAM_ID     Debug chat ID for testing (optional)
+  
+Note: At least one of IMMOSCOUT_FILTER_URL or KLEINANZEIGEN_FILTER_URL must be provided.
 `);
   process.exit(0);
 }
@@ -85,7 +88,8 @@ function validateUrl(input: string): boolean {
 // Function to get configuration
 async function getConfiguration() {
   let telegramChatIds: string[] = [];
-  let filterUrl: string = '';
+  let immoscoutFilterUrl: string = '';
+  let kleinanzeigenFilterUrl: string = '';
 
   if (isInteractive) {
     console.log('🔧 Interactive mode enabled');
@@ -106,27 +110,47 @@ async function getConfiguration() {
       .map((id: string) => id.trim());
 
     // Get ImmoScout Filter URL
-    const urlAnswer = await inquirer.prompt([
+    const immoscoutAnswer = await inquirer.prompt([
       {
         type: 'input',
         name: 'filterUrl',
-        message: 'Enter ImmoScout24 filter URL:',
+        message: 'Enter ImmoScout24 filter URL (leave empty to skip):',
         validate: (input: string) =>
-          validateUrl(input) || 'Please enter a valid URL',
+          !input ||
+          validateUrl(input) ||
+          'Please enter a valid URL or leave empty',
         default: process.env.IMMOSCOUT_FILTER_URL || '',
       },
     ]);
-    filterUrl = urlAnswer.filterUrl;
+    immoscoutFilterUrl = immoscoutAnswer.filterUrl;
+
+    // Get Kleinanzeigen Filter URL
+    const kleinanzeigenAnswer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'filterUrl',
+        message: 'Enter Kleinanzeigen filter URL (leave empty to skip):',
+        validate: (input: string) =>
+          !input ||
+          validateUrl(input) ||
+          'Please enter a valid URL or leave empty',
+        default: process.env.KLEINANZEIGEN_FILTER_URL || '',
+      },
+    ]);
+    kleinanzeigenFilterUrl = kleinanzeigenAnswer.filterUrl;
   } else {
     // Use environment variables
     telegramChatIds =
       process.env.TELEGRAM_CHAT_IDS?.split(',').map((id) => id.trim()) || [];
-    filterUrl = process.env.IMMOSCOUT_FILTER_URL || '';
+    immoscoutFilterUrl = process.env.IMMOSCOUT_FILTER_URL || '';
+    kleinanzeigenFilterUrl = process.env.KLEINANZEIGEN_FILTER_URL || '';
   }
 
   // Validate required values
-  if (!filterUrl) {
-    console.error('❌ ImmoScout24 filter URL is required');
+  if (!immoscoutFilterUrl && !kleinanzeigenFilterUrl) {
+    console.error(
+      '❌ At least one filter URL (ImmoScout24 or Kleinanzeigen) is required'
+    );
     process.exit(1);
   }
 
@@ -137,7 +161,8 @@ async function getConfiguration() {
 
   return {
     telegramChatIds,
-    filterUrl,
+    immoscoutFilterUrl,
+    kleinanzeigenFilterUrl,
   };
 }
 
@@ -145,8 +170,9 @@ async function getConfiguration() {
 async function main() {
   const config = await getConfiguration();
 
-  // 🔗 Your saved ImmoScout24 filter URL
-  const FILTER_URL = config.filterUrl;
+  // 🔗 Filter URLs
+  const IMMOSCOUT_FILTER_URL = config.immoscoutFilterUrl;
+  const KLEINANZEIGEN_FILTER_URL = config.kleinanzeigenFilterUrl;
 
   // 📬 Telegram setup
   const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN!;
@@ -154,10 +180,6 @@ async function main() {
 
   // 📁 Tracking seen listings
   const INSTANCE_NAME = process.env.INSTANCE_NAME || 'default';
-  const SEEN_FILE = path.resolve(
-    __dirname,
-    `seenListings.${INSTANCE_NAME}.json`
-  );
   const DEBUG_LOG_FILE = path.resolve(__dirname, `debug.${INSTANCE_NAME}.log`);
   const MAX_SEEN_IDS = 100;
   const REMOVE_COUNT = 70;
@@ -177,7 +199,7 @@ async function main() {
   const INITIAL_RETRY_DELAY = 5000; // 5 seconds
 
   // Debug configuration
-  const DEBUG = false;
+  const DEBUG = true;
   const DEBUG_TELEGRAM_ID = process.env.DEBUG_TELEGRAM_ID || '';
 
   // Check interval configuration (in milliseconds)
@@ -265,30 +287,6 @@ async function main() {
       pageInstance.on('pageerror', (err: Error) => {
         console.error('❌ Page error:', err);
       });
-
-      // Initial page load
-      console.log('🌐 Navigating to ImmoScout24...');
-      await pageInstance.goto(FILTER_URL, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
-
-      // Handle cookie consent
-      try {
-        console.log('🍪 Looking for cookie consent button...');
-        await pageInstance.waitForSelector(
-          '[data-testid="uc-accept-all-button"]',
-          {
-            timeout: 10000,
-          }
-        );
-        await randomDelay(500, 1500);
-        await pageInstance.click('[data-testid="uc-accept-all-button"]');
-        console.log('✅ Accepted cookies');
-        await randomDelay();
-      } catch (e) {
-        console.log('⚠️ Cookie button not found or already accepted');
-      }
     }
     return pageInstance;
   }
@@ -301,11 +299,11 @@ async function main() {
     console.log(message);
   }
 
-  function loadSeenListings(): Map<string, any> {
-    const serviceFile = getServiceSpecificFile('immoscout');
+  function loadSeenListings(service: string): Map<string, any> {
+    const serviceFile = getServiceSpecificFile(service);
     if (!fs.existsSync(serviceFile)) {
       logDebug(
-        `📁 No seen listings file found for instance ${INSTANCE_NAME}, starting fresh`
+        `📁 No seen listings file found for ${service} instance ${INSTANCE_NAME}, starting fresh`
       );
       return new Map();
     }
@@ -316,14 +314,14 @@ async function main() {
       );
       return new Map(Object.entries(data));
     } catch (error) {
-      logDebug(`❌ Error loading seen listings: ${error}`);
+      logDebug(`❌ Error loading seen listings for ${service}: ${error}`);
       return new Map();
     }
   }
 
-  function saveSeenListings(listings: Map<string, any>) {
+  function saveSeenListings(service: string, listings: Map<string, any>) {
     try {
-      const serviceFile = getServiceSpecificFile('immoscout');
+      const serviceFile = getServiceSpecificFile(service);
       // Convert to array and sort by timestamp
       const allListings = Array.from(listings.entries());
       const sortedListings = allListings.sort((a, b) => {
@@ -337,13 +335,13 @@ async function main() {
         const removedListings = sortedListings.slice(
           MAX_SEEN_IDS - REMOVE_COUNT
         );
-        logDebug('\n🗑️ Removing old listings:');
+        logDebug(`\n🗑️ Removing old listings for ${service}:`);
         removedListings.forEach(([id, data]) => {
           const date = new Date(data.timestamp).toLocaleString();
           logDebug(`   - ID: ${id}, Seen: ${date}, URL: ${data.url}`);
         });
         logDebug(
-          `\n📊 Summary: Removed ${removedListings.length} old listings`
+          `\n📊 Summary: Removed ${removedListings.length} old listings for ${service}`
         );
       }
 
@@ -353,22 +351,24 @@ async function main() {
       fs.writeFileSync(serviceFile, JSON.stringify(listingsToSave, null, 2));
 
       logDebug(`\n✅ Saved ${keptListings.length} listings to ${serviceFile}`);
-      logDebug(
-        `📅 Oldest kept listing: ${new Date(
-          keptListings[keptListings.length - 1][1].timestamp
-        ).toLocaleString()}`
-      );
-      logDebug(
-        `📅 Newest kept listing: ${new Date(
-          keptListings[0][1].timestamp
-        ).toLocaleString()}`
-      );
+      if (keptListings.length > 0) {
+        logDebug(
+          `📅 Oldest kept listing: ${new Date(
+            keptListings[keptListings.length - 1][1].timestamp
+          ).toLocaleString()}`
+        );
+        logDebug(
+          `📅 Newest kept listing: ${new Date(
+            keptListings[0][1].timestamp
+          ).toLocaleString()}`
+        );
+      }
 
       // Log file size
       const stats = fs.statSync(serviceFile);
       logDebug(`📊 File size: ${(stats.size / 1024).toFixed(2)} KB`);
     } catch (error) {
-      logDebug(`❌ Error saving seen listings: ${error}`);
+      logDebug(`❌ Error saving seen listings for ${service}: ${error}`);
     }
   }
 
@@ -426,496 +426,333 @@ async function main() {
     }
   }
 
-  // 🔍 Explore all pages of filtered apartments
-  async function exploreAllFilterPages() {
-    console.log('\n==========================================');
-    console.log('🔍 EXPLORING ALL FILTER PAGES');
-    console.log('==========================================');
+  // 🏠 ImmoScout24 specific functions
+  async function handleImmoScout24CookieConsent(page: any) {
+    try {
+      console.log('🍪 Looking for ImmoScout24 cookie consent button...');
+      await page.waitForSelector('[data-testid="uc-accept-all-button"]', {
+        timeout: 10000,
+      });
+      await randomDelay(500, 1500);
+      await page.click('[data-testid="uc-accept-all-button"]');
+      console.log('✅ Accepted ImmoScout24 cookies');
+      await randomDelay();
+    } catch (e) {
+      console.log('⚠️ ImmoScout24 cookie button not found or already accepted');
+    }
+  }
 
-    const page = await initializePage();
-    let totalNewListings: string[] = [];
-    const seen = loadSeenListings();
-    const newSeen = new Map(seen);
+  async function checkImmoScoutListings(page: any): Promise<string[]> {
+    console.log('\n🏠 Checking ImmoScout24 listings...');
+    const newListings: string[] = [];
 
-    console.log(`📚 Starting with ${seen.size} previously seen listings`);
-    console.log(
-      `📁 Data will be saved to: ${getServiceSpecificFile('immoscout')}`
-    );
-
-    // First, navigate to the first page and detect total number of pages
-    console.log('🔄 Loading first page to detect total pages...');
-    await page.goto(FILTER_URL, {
+    // Navigate to ImmoScout24
+    console.log('🌐 Navigating to ImmoScout24...');
+    await page.goto(IMMOSCOUT_FILTER_URL, {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     });
+
+    await handleImmoScout24CookieConsent(page);
+
+    // Wait for listings to load
+    const listingSelector = '[data-testid$="-slide-0"]';
+    console.log('⏳ Waiting for ImmoScout24 listings...');
+    await page.waitForSelector(listingSelector, { timeout: 15000 });
+
+    const listings = await page.$$(listingSelector);
+    console.log(`📊 Found ${listings.length} ImmoScout24 listings`);
+
+    if (listings.length === 0) {
+      console.log('❌ No ImmoScout24 listings found!');
+      return newListings;
+    }
+
+    const seen = loadSeenListings('immoscout');
+    const newSeen = new Map(seen);
+
+    // Process each listing
+    for (const listing of listings) {
+      try {
+        const dataTestId = await listing.getAttribute('data-testid');
+        if (!dataTestId) continue;
+
+        const id = dataTestId.split('-')[0];
+        const isNew = !seen.has(id);
+
+        if (isNew) {
+          console.log(`🆕 Found new ImmoScout24 listing: ${id}`);
+
+          const link = await listing.$('xpath=ancestor::a');
+          if (!link) continue;
+
+          const href = await link.getAttribute('href');
+          if (!href) continue;
+
+          const fullUrl = href.startsWith('http')
+            ? href
+            : `https://www.immobilienscout24.de${href}`;
+
+          newListings.push(fullUrl);
+
+          const listingData = {
+            id,
+            url: fullUrl,
+            timestamp: new Date().toISOString(),
+            service: 'immoscout',
+          };
+          newSeen.set(id, listingData);
+        }
+      } catch (error) {
+        console.error(`❌ Error processing ImmoScout24 listing:`, error);
+        continue;
+      }
+    }
+
+    saveSeenListings('immoscout', newSeen);
+    console.log(`✅ Found ${newListings.length} new ImmoScout24 listings`);
+    return newListings;
+  }
+
+  // 🏘️ Kleinanzeigen specific functions
+  async function handleKleinanzeigenCookieConsent(page: any) {
+    try {
+      console.log('🍪 Looking for Kleinanzeigen cookie consent...');
+      // Common cookie consent selectors for Kleinanzeigen
+      const cookieSelectors = [
+        '[data-testid="gdpr-accept-all"]',
+        '.gdpr-cookie-layer__btn--accept-all',
+        '#gdpr-consent-accept-all',
+        'button[id*="accept"]',
+        'button[class*="accept"]',
+        '.cookie-consent button',
+      ];
+
+      for (const selector of cookieSelectors) {
+        try {
+          await page.waitForSelector(selector, { timeout: 3000 });
+          await randomDelay(500, 1500);
+          await page.click(selector);
+          console.log('✅ Accepted Kleinanzeigen cookies');
+          await randomDelay();
+          return;
+        } catch (e) {
+          continue;
+        }
+      }
+      console.log(
+        '⚠️ Kleinanzeigen cookie button not found or already accepted'
+      );
+    } catch (e) {
+      console.log('⚠️ Error handling Kleinanzeigen cookies:', e);
+    }
+  }
+
+  async function checkKleinanzeigenListings(page: any): Promise<string[]> {
+    console.log('\n🏘️ Checking Kleinanzeigen listings...');
+    const newListings: string[] = [];
+
+    // Navigate to Kleinanzeigen
+    console.log('🌐 Navigating to Kleinanzeigen...');
+    await page.goto(KLEINANZEIGEN_FILTER_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+
+    await handleKleinanzeigenCookieConsent(page);
+
+    // Wait for page to load
     await randomDelay(2000, 3000);
 
-    // Detect total number of pages
-    let totalPages = 1;
-    try {
-      // Look for numbered pagination buttons to determine total pages
-      console.log('🔍 Looking for pagination buttons...');
-      const paginationSelector = '[data-testid="pagination-button"][page]';
-      await page.waitForSelector(paginationSelector, { timeout: 5000 });
-      
-      const paginationButtons = await page.$$(paginationSelector);
-      console.log(`📊 Found ${paginationButtons.length} pagination buttons`);
-      
-      if (paginationButtons.length > 0) {
-        // Get all page numbers from pagination buttons
-        const pageNumbers = [];
-        for (const button of paginationButtons) {
-          const pageAttr = await button.getAttribute('page');
-          const buttonText = await button.textContent();
-          console.log(`   - Button: page="${pageAttr}", text="${buttonText}"`);
-          
-          if (pageAttr && !isNaN(parseInt(pageAttr))) {
-            pageNumbers.push(parseInt(pageAttr));
-          }
+    // Possible selectors for Kleinanzeigen listings
+    const listingSelectors = [
+      'article[data-adid]',
+      '.ad-listitem',
+      '.aditem',
+      '[data-adid]',
+      '.adlist-item',
+    ];
+
+    let listings: any[] = [];
+    let usedSelector = '';
+
+    // Try different selectors to find listings
+    for (const selector of listingSelectors) {
+      try {
+        await page.waitForSelector(selector, { timeout: 5000 });
+        listings = await page.$$(selector);
+        if (listings.length > 0) {
+          usedSelector = selector;
+          console.log(
+            `📊 Found ${listings.length} Kleinanzeigen listings using selector: ${selector}`
+          );
+          break;
         }
-        
-        if (pageNumbers.length > 0) {
-          totalPages = Math.max(...pageNumbers);
-          console.log(`📊 Page numbers found: [${pageNumbers.join(', ')}]`);
-        }
-      } else {
-        // Fallback: try to find pagination container and extract page info
-        console.log('🔍 Trying fallback pagination detection...');
-        const paginationContainer = await page.$('.Pagination_pagination__s5mQ8');
-        if (paginationContainer) {
-          const paginationHTML = await paginationContainer.innerHTML();
-          console.log('📄 Pagination HTML found:', paginationHTML.substring(0, 200) + '...');
-          
-          // Try to find all buttons with page attributes
-          const allPageButtons = await paginationContainer.$$('button[page]');
-          console.log(`📊 Found ${allPageButtons.length} buttons with page attributes`);
-          
-          const pageNumbers = [];
-          for (const button of allPageButtons) {
-            const pageAttr = await button.getAttribute('page');
-            const buttonText = await button.textContent();
-            const testId = await button.getAttribute('data-testid');
-            console.log(`   - Button: page="${pageAttr}", text="${buttonText}", testid="${testId}"`);
-            
-            // Only count numbered page buttons (not prev/next)
-            if (pageAttr && !isNaN(parseInt(pageAttr)) && testId === 'pagination-button') {
-              pageNumbers.push(parseInt(pageAttr));
-            }
-          }
-          
-          if (pageNumbers.length > 0) {
-            totalPages = Math.max(...pageNumbers);
-            console.log(`📊 Fallback page numbers found: [${pageNumbers.join(', ')}]`);
-          }
-        }
+      } catch (e) {
+        continue;
       }
-      
-      console.log(`📊 Detected ${totalPages} total pages`);
-    } catch (error) {
-      console.log('⚠️ Could not detect pagination, assuming single page');
-      console.log(`   Error: ${error instanceof Error ? error.message : String(error)}`);
-      
-      // Take a screenshot for debugging
-      console.log('📸 Taking screenshot for pagination debugging...');
-      await page.screenshot({ path: 'pagination-detection-debug.png' });
-      
-      totalPages = 1;
     }
 
-    // Process each page by modifying the URL
-    for (let currentPage = 1; currentPage <= totalPages; currentPage++) {
-      console.log(`\n📄 Processing page ${currentPage} of ${totalPages}...`);
+    if (listings.length === 0) {
+      console.log('❌ No Kleinanzeigen listings found!');
+      console.log('📸 Taking screenshot for debugging...');
+      await page.screenshot({ path: 'kleinanzeigen-no-listings.png' });
+      return newListings;
+    }
 
+    const seen = loadSeenListings('kleinanzeigen');
+    const newSeen = new Map(seen);
+
+    // Process each listing
+    for (const listing of listings) {
       try {
-        // Construct URL for current page
-        const pageUrl =
-          currentPage === 1
-            ? FILTER_URL
-            : `${FILTER_URL}${
-                FILTER_URL.includes('?') ? '&' : '?'
-              }pagenumber=${currentPage}`;
+        // Try to get listing ID from data-adid attribute
+        let id = await listing.getAttribute('data-adid');
 
-        console.log(`🌐 Navigating to: ${pageUrl}`);
-        console.log(`   Original URL: ${FILTER_URL}`);
-        console.log(
-          `   Page parameter: ${
-            currentPage === 1
-              ? 'none (first page)'
-              : `pagenumber=${currentPage}`
-          }`
-        );
+        if (!id) {
+          // Try to extract ID from link href
+          const link = await listing.$('a');
+          if (link) {
+            const href = await link.getAttribute('href');
+            if (href) {
+              const idMatch = href.match(/\/(\d+)(?:-|$)/);
+              if (idMatch) {
+                id = idMatch[1];
+              }
+            }
+          }
+        }
 
-        // Navigate to the specific page
-        await page.goto(pageUrl, {
-          waitUntil: 'domcontentloaded',
-          timeout: 30000,
+        if (!id) {
+          console.log('⚠️ Could not extract ID from Kleinanzeigen listing');
+          continue;
+        }
+
+        const isNew = !seen.has(id);
+
+        if (isNew) {
+          console.log(`🆕 Found new Kleinanzeigen listing: ${id}`);
+
+          // Find the link to the listing
+          let link = await listing.$('a');
+          if (!link) {
+            // Try to find link in parent elements
+            link = await listing.$('xpath=.//a');
+          }
+
+          if (!link) {
+            console.log('⚠️ No link found for Kleinanzeigen listing');
+            continue;
+          }
+
+          const href = await link.getAttribute('href');
+          if (!href) {
+            console.log('⚠️ No href found for Kleinanzeigen listing');
+            continue;
+          }
+
+          const fullUrl = href.startsWith('http')
+            ? href
+            : `https://www.kleinanzeigen.de${href}`;
+
+          newListings.push(fullUrl);
+
+          const listingData = {
+            id,
+            url: fullUrl,
+            timestamp: new Date().toISOString(),
+            service: 'kleinanzeigen',
+          };
+          newSeen.set(id, listingData);
+        }
+      } catch (error) {
+        console.error(`❌ Error processing Kleinanzeigen listing:`, error);
+        continue;
+      }
+    }
+
+    saveSeenListings('kleinanzeigen', newSeen);
+    console.log(`✅ Found ${newListings.length} new Kleinanzeigen listings`);
+    return newListings;
+  }
+
+  async function checkAllServices() {
+    console.log('\n==========================================');
+    console.log('🔄 STARTING NEW CHECK CYCLE');
+    console.log('==========================================');
+
+    const page = await initializePage();
+    let allNewListings: { url: string; service: string }[] = [];
+
+    // Check ImmoScout24 if URL is provided
+    if (IMMOSCOUT_FILTER_URL) {
+      try {
+        const immoscoutListings = await checkImmoScoutListings(page);
+        immoscoutListings.forEach((url) => {
+          allNewListings.push({ url, service: 'ImmoScout24' });
         });
-        await randomDelay(2000, 3000);
-
-        // Verify we're on the correct page by checking URL
-        const currentUrl = page.url();
-        console.log(`✅ Current page URL: ${currentUrl}`);
-
-        // Wait for listings to load
-        const listingSelector = '[data-testid$="-slide-0"]';
-        console.log(`⏳ Waiting for listings on page ${currentPage}...`);
-        await page.waitForSelector(listingSelector, { timeout: 15000 });
-        console.log('✅ Listings loaded on current page');
-
-        // Get all listing elements on current page
-        const listings = await page.$$(listingSelector);
-        console.log(
-          `📊 Found ${listings.length} listings on page ${currentPage}`
-        );
-
-        if (listings.length === 0) {
-          console.log(`❌ No listings found on page ${currentPage}!`);
-          console.log('📸 Taking screenshot for debugging...');
-          await page.screenshot({
-            path: `no-listings-page-${currentPage}.png`,
-          });
-          continue; // Continue to next page instead of breaking
-        }
-
-        const pageNewListings: string[] = [];
-
-        // Process each listing on current page
-        for (const listing of listings) {
-          try {
-            const dataTestId = await listing.getAttribute('data-testid');
-            if (!dataTestId) {
-              console.log('⚠️ Skipping listing without data-testid');
-              continue;
-            }
-
-            const id = dataTestId.split('-')[0];
-            console.log(
-              `📝 Processing listing ID: ${id} on page ${currentPage}`
-            );
-
-            const isNew = !seen.has(id);
-
-            if (isNew) {
-              console.log(`🆕 Found new listing: ${id} on page ${currentPage}`);
-
-              const link = await listing.$('xpath=ancestor::a');
-              if (!link) {
-                console.log('⚠️ No link found for listing, skipping...');
-                continue;
-              }
-
-              const href = await link.getAttribute('href');
-              if (!href) {
-                console.log('⚠️ No href found for listing, skipping...');
-                continue;
-              }
-
-              const fullUrl = href.startsWith('http')
-                ? href
-                : `https://www.immobilienscout24.de${href}`;
-
-              pageNewListings.push(fullUrl);
-              totalNewListings.push(fullUrl);
-
-              const listingData = {
-                id,
-                url: fullUrl,
-                timestamp: new Date().toISOString(),
-                page: currentPage,
-              };
-              newSeen.set(id, listingData);
-              console.log(
-                `✅ Added new listing from page ${currentPage}:`,
-                listingData
-              );
-            } else {
-              const seenData = seen.get(id);
-              console.log(
-                `⏭️ Skipping already seen listing: ${id} (seen at ${seenData?.timestamp})`
-              );
-            }
-          } catch (error) {
-            console.error(
-              `❌ Error processing listing on page ${currentPage}:`,
-              error
-            );
-            continue;
-          }
-        }
-
-        console.log(
-          `📊 Page ${currentPage} summary: ${pageNewListings.length} new listings found`
-        );
-        console.log(`📊 Total new listings so far: ${totalNewListings.length}`);
-        console.log(`📊 Total tracked listings: ${newSeen.size}`);
-
-        // Save progress after each page
-        if (pageNewListings.length > 0) {
-          console.log(`💾 Saving progress after page ${currentPage}...`);
-          saveSeenListings(newSeen);
-          console.log(`✅ Progress saved successfully`);
-        }
-
-        // Add delay between pages to be respectful
-        if (currentPage < totalPages) {
-          await randomDelay(2000, 4000);
-        }
       } catch (error) {
-        console.error(`❌ Error processing page ${currentPage}:`, error);
-        console.log('📸 Taking screenshot for debugging...');
-        await page.screenshot({ path: `error-page-${currentPage}.png` });
-        continue; // Continue to next page instead of breaking
+        console.error('❌ Error checking ImmoScout24:', error);
       }
     }
 
-    // Save all discovered listings
-    console.log(`\n💾 Saving ${newSeen.size} total listings...`);
-    saveSeenListings(newSeen);
-    console.log('✅ All listings saved successfully');
-
-    console.log(`\n📊 EXPLORATION COMPLETE:`);
-    console.log(`   - Total pages explored: ${totalPages}`);
-    console.log(`   - Total new listings found: ${totalNewListings.length}`);
-
-    return totalNewListings;
-  }
-
-  async function checkFilteredPage() {
-    let retryCount = 0;
-
-    while (retryCount < MAX_RETRIES) {
+    // Check Kleinanzeigen if URL is provided
+    if (KLEINANZEIGEN_FILTER_URL) {
       try {
-        console.log('\n==========================================');
-        console.log(
-          `🔄 STARTING NEW CHECK CYCLE ${retryCount + 1}/${MAX_RETRIES}`
-        );
-        console.log('==========================================');
-
-        let newListings: string[] = [];
-
-        if (exploreAllPages) {
-          // Use the explore all pages method
-          newListings = await exploreAllFilterPages();
-        } else {
-          // Use the original single page method
-          const page = await initializePage();
-
-          // Force a fresh page load
-          console.log('\n==========================================');
-          console.log('🔄 REFRESHING PAGE');
-          console.log('==========================================');
-
-          try {
-            // Use the existing page to navigate
-            await page.goto(FILTER_URL, {
-              waitUntil: 'domcontentloaded',
-              timeout: 30000,
-            });
-
-            console.log('==========================================');
-            console.log('✅ PAGE REFRESHED');
-            console.log('==========================================\n');
-
-            // Wait for the page to fully load
-            await page.waitForTimeout(2000);
-
-            // ✅ Wait for listings
-            console.log('🔍 Waiting for listings to load...');
-            const listingSelector = '[data-testid$="-slide-0"]';
-
-            // Wait for the "Suche speichern" button to be visible
-            console.log(
-              '⏳ Waiting for page to load (looking for "Suche speichern" button)...'
-            );
-            await page.waitForSelector('#saveSearchHeaderLink', {
-              timeout: 15000,
-            });
-            console.log('✅ Page loaded successfully');
-
-            // Wait for listings
-            console.log('⏳ Waiting for listings...');
-            await page.waitForSelector(listingSelector, { timeout: 15000 });
-            console.log('✅ Listings container found');
-
-            // Get all listing elements
-            console.log('🔍 Finding all listings...');
-            const listings = await page.$$(listingSelector);
-            console.log(`📊 Found ${listings.length} listings on the page`);
-
-            if (listings.length === 0) {
-              console.error('❌ No listings found!');
-              console.log('📸 Taking screenshot for debugging...');
-              await page.screenshot({ path: 'no-listings.png' });
-              throw new Error('No listings found on the page');
-            }
-
-            const seen = loadSeenListings();
-            const newSeen = new Map(seen);
-
-            console.log(`📚 Loaded ${seen.size} seen listings from JSON`);
-            console.log('🔍 Checking for new listings...');
-
-            // Process each listing
-            for (const listing of listings) {
-              try {
-                const dataTestId = await listing.getAttribute('data-testid');
-                if (!dataTestId) {
-                  console.log('⚠️ Skipping listing without data-testid');
-                  continue;
-                }
-
-                const id = dataTestId.split('-')[0];
-                console.log(`\n📝 Processing listing ID: ${id}`);
-
-                const isNew = !seen.has(id);
-                console.log(
-                  `🔍 Listing ${id} is ${isNew ? 'NEW' : 'already seen'}`
-                );
-
-                if (isNew) {
-                  console.log(`🆕 Found new listing: ${id}`);
-
-                  const link = await listing.$('xpath=ancestor::a');
-                  if (!link) {
-                    console.log('⚠️ No link found for listing, skipping...');
-                    continue;
-                  }
-
-                  const href = await link.getAttribute('href');
-                  if (!href) {
-                    console.log('⚠️ No href found for listing, skipping...');
-                    continue;
-                  }
-
-                  const fullUrl = href.startsWith('http')
-                    ? href
-                    : `https://www.immobilienscout24.de${href}`;
-
-                  newListings.push(fullUrl);
-
-                  const listingData = {
-                    id,
-                    url: fullUrl,
-                    timestamp: new Date().toISOString(),
-                  };
-                  newSeen.set(id, listingData);
-                  console.log(
-                    `✅ Added new listing to seen listings:`,
-                    listingData
-                  );
-                } else {
-                  const seenData = seen.get(id);
-                  console.log(
-                    `⏭️ Skipping already seen listing: ${id} (seen at ${seenData?.timestamp})`
-                  );
-                }
-              } catch (error) {
-                console.error(`❌ Error processing listing:`, error);
-                continue;
-              }
-            }
-
-            // Save updated seen listings
-            console.log(
-              `\n💾 Saving ${newSeen.size} listings to seenListings.json...`
-            );
-            saveSeenListings(newSeen);
-            console.log('✅ Seen listings saved successfully');
-          } catch (error) {
-            console.error('❌ Error during page check:', error);
-            retryCount++;
-            if (retryCount === MAX_RETRIES) {
-              throw error;
-            }
-            console.log(`🔄 Retrying... (${retryCount}/${MAX_RETRIES})`);
-            await new Promise((resolve) => setTimeout(resolve, 5000));
-            continue;
-          }
-        }
-
-        // Send new listings to Telegram (common for both methods)
-        if (newListings.length > 0) {
-          console.log(
-            `\n📤 Sending ${newListings.length} new listings to Telegram as separate messages...`
-          );
-
-          // Send header message first
-          const headerMessage = exploreAllPages
-            ? '🆕 Neue Wohnungen gefunden (alle Seiten durchsucht):'
-            : '🆕 Neue Wohnungen gefunden:';
-          if (DEBUG) {
-            await sendTelegramMessage(headerMessage, DEBUG_TELEGRAM_ID);
-          } else {
-            await sendTelegramMessage(headerMessage);
-          }
-
-          // Add small delay between messages to avoid rate limits
-          await randomDelay(1000, 2000);
-
-          // Send each listing as a separate message
-          for (let i = 0; i < newListings.length; i++) {
-            const listingMessage = `🏠 Wohnung ${i + 1}/${
-              newListings.length
-            }:\n${newListings[i]}`;
-
-            if (DEBUG) {
-              await sendTelegramMessage(listingMessage, DEBUG_TELEGRAM_ID);
-            } else {
-              await sendTelegramMessage(listingMessage);
-            }
-
-            // Add delay between messages (except for the last one)
-            if (i < newListings.length - 1) {
-              await randomDelay(1000, 2000);
-            }
-          }
-
-          // Add delay before footer message
-          await randomDelay(1000, 2000);
-
-          // Send footer message
-          const footerMessage = 'Viel Erfolg bei der Wohnungssuche! 🍀';
-          if (DEBUG) {
-            await sendTelegramMessage(footerMessage, DEBUG_TELEGRAM_ID);
-          } else {
-            await sendTelegramMessage(footerMessage);
-          }
-
-          console.log(
-            `✅ Sent ${newListings.length} new listings to Telegram as separate messages`
-          );
-        } else {
-          console.log('\n📭 No new listings found.');
-        }
-
-        break;
+        const kleinanzeigenListings = await checkKleinanzeigenListings(page);
+        kleinanzeigenListings.forEach((url) => {
+          allNewListings.push({ url, service: 'Kleinanzeigen' });
+        });
       } catch (error) {
-        console.error('❌ Check failed:', error);
-        throw error;
+        console.error('❌ Error checking Kleinanzeigen:', error);
       }
     }
-  }
 
-  async function getRandomInterval() {
-    const interval =
-      Math.floor(Math.random() * (MAX_INTERVAL - MIN_INTERVAL + 1)) +
-      MIN_INTERVAL;
-    return interval;
+    // Send new listings to Telegram
+    if (allNewListings.length > 0) {
+      console.log(
+        `\n📤 Sending ${allNewListings.length} new listings to Telegram...`
+      );
+
+      // Build combined message with header, listings, and footer
+      let combinedMessage = `🆕 Neue Wohnungen gefunden (${allNewListings.length} insgesamt):\n\n`;
+
+      // Add each listing to the message
+      for (let i = 0; i < allNewListings.length; i++) {
+        const { url, service } = allNewListings[i];
+        const serviceEmoji = service === 'ImmoScout24' ? '🏠' : '🏘️';
+        combinedMessage += `${serviceEmoji} ${service} - Wohnung ${i + 1}/${
+          allNewListings.length
+        }:\n${url}\n\n`;
+      }
+
+      // Add footer
+      combinedMessage += 'Viel Erfolg bei der Wohnungssuche! 🍀';
+
+      // Send combined message
+      if (DEBUG) {
+        await sendTelegramMessage(combinedMessage, DEBUG_TELEGRAM_ID);
+      } else {
+        await sendTelegramMessage(combinedMessage);
+      }
+
+      console.log(
+        `✅ Sent ${allNewListings.length} new listings to Telegram in one message`
+      );
+    } else {
+      console.log('\n📭 No new listings found on any platform.');
+    }
   }
 
   async function runPeriodicCheck() {
+    const enabledServices = [];
+    if (IMMOSCOUT_FILTER_URL) enabledServices.push('ImmoScout24');
+    if (KLEINANZEIGEN_FILTER_URL) enabledServices.push('Kleinanzeigen');
+
     console.log('🔄 Starting autonomous check system...');
+    console.log(`🏠 Enabled services: ${enabledServices.join(', ')}`);
     console.log(`⏰ Will check every ${DEBUG ? '10 seconds' : '5-8 minutes'}`);
     console.log('📱 New listings will be sent to Telegram');
-    if (exploreAllPages) {
-      console.log(
-        '🔍 EXPLORE ALL PAGES MODE: Will check all pages of filter results'
-      );
-    } else {
-      console.log(
-        '📄 SINGLE PAGE MODE: Will check only the first page of filter results'
-      );
-    }
     console.log('❌ Press Ctrl+C to stop the script\n');
 
     // Initialize browser and page once at the start
@@ -926,7 +763,7 @@ async function main() {
         const currentTime = new Date().toLocaleString();
         console.log(`\n⏰ Starting check at ${currentTime}`);
 
-        await checkFilteredPage();
+        await checkAllServices();
 
         // Wait for the next check
         const waitTime = DEBUG
@@ -963,19 +800,15 @@ async function main() {
 
   // Start the check (either once or periodic)
   if (runOnce) {
+    const enabledServices = [];
+    if (IMMOSCOUT_FILTER_URL) enabledServices.push('ImmoScout24');
+    if (KLEINANZEIGEN_FILTER_URL) enabledServices.push('Kleinanzeigen');
+
     console.log('🔄 Running single check...');
-    if (exploreAllPages) {
-      console.log(
-        '🔍 EXPLORE ALL PAGES MODE: Will check all pages of filter results'
-      );
-    } else {
-      console.log(
-        '📄 SINGLE PAGE MODE: Will check only the first page of filter results'
-      );
-    }
+    console.log(`🏠 Enabled services: ${enabledServices.join(', ')}`);
 
     try {
-      await checkFilteredPage();
+      await checkAllServices();
       console.log('✅ Single check completed successfully!');
     } catch (error) {
       console.error('❌ Single check failed:', error);

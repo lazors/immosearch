@@ -199,7 +199,7 @@ async function main() {
   const INITIAL_RETRY_DELAY = 5000; // 5 seconds
 
   // Debug configuration
-  const DEBUG = true;
+  const DEBUG = false;
   const DEBUG_TELEGRAM_ID = process.env.DEBUG_TELEGRAM_ID || '';
 
   // Check interval configuration (in milliseconds)
@@ -714,30 +714,36 @@ async function main() {
         `\n📤 Sending ${allNewListings.length} new listings to Telegram...`
       );
 
-      // Build combined message with header, listings, and footer
-      let combinedMessage = `🆕 Neue Wohnungen gefunden (${allNewListings.length} insgesamt):\n\n`;
+      // Send header message first
+      const headerMessage = `🆕 Neue Wohnungen gefunden (${allNewListings.length} insgesamt):`;
+      if (DEBUG) {
+        await sendTelegramMessage(headerMessage, DEBUG_TELEGRAM_ID);
+      } else {
+        await sendTelegramMessage(headerMessage);
+      }
 
-      // Add each listing to the message
+      // Send each listing as a separate message
       for (let i = 0; i < allNewListings.length; i++) {
         const { url, service } = allNewListings[i];
         const serviceEmoji = service === 'ImmoScout24' ? '🏠' : '🏘️';
-        combinedMessage += `${serviceEmoji} ${service} - Wohnung ${i + 1}/${
+        const listingMessage = `${serviceEmoji} ${service} - Wohnung ${i + 1}/${
           allNewListings.length
-        }:\n${url}\n\n`;
-      }
+        }:\n${url}`;
 
-      // Add footer
-      combinedMessage += 'Viel Erfolg bei der Wohnungssuche! 🍀';
+        if (DEBUG) {
+          await sendTelegramMessage(listingMessage, DEBUG_TELEGRAM_ID);
+        } else {
+          await sendTelegramMessage(listingMessage);
+        }
 
-      // Send combined message
-      if (DEBUG) {
-        await sendTelegramMessage(combinedMessage, DEBUG_TELEGRAM_ID);
-      } else {
-        await sendTelegramMessage(combinedMessage);
+        // Add small delay between messages to avoid rate limits
+        if (i < allNewListings.length - 1) {
+          await randomDelay(500, 1000);
+        }
       }
 
       console.log(
-        `✅ Sent ${allNewListings.length} new listings to Telegram in one message`
+        `✅ Sent ${allNewListings.length} new listings to Telegram as separate messages`
       );
     } else {
       console.log('\n📭 No new listings found on any platform.');

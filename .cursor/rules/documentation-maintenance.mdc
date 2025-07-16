@@ -1,0 +1,228 @@
+# Documentation Maintenance Guide
+
+This rule ensures that the three main documentation files stay synchronized with project changes:
+
+- [project-overview.mdc](mdc:project-overview.mdc) - High-level project overview and architecture
+- [immosearch-structure.mdc](mdc:immosearch-structure.mdc) - Detailed technical structure and development guidelines
+- [add-new-website-resources.mdc](mdc:add-new-website-resources.mdc) - Guide for extending the platform
+
+## Documentation Update Triggers
+
+### When to Update project-overview.mdc
+
+Update this file when:
+
+- **New scripts** are added to package.json
+- **New environment variables** are introduced
+- **New features** are implemented that change the core purpose
+- **New platforms** are added to the scraping system
+- **Deployment strategy** changes (Docker, configuration, etc.)
+
+### When to Update immosearch-structure.mdc
+
+Update this file when:
+
+- **Architecture changes** occur (new modules, refactoring)
+- **Development workflow** changes (new scripts, tools)
+- **Code quality standards** are updated
+- **Error handling patterns** change
+- **Performance optimizations** are implemented
+- **Docker configuration** changes in [docker-compose.yml](mdc:docker-compose.yml) or [Dockerfile](mdc:Dockerfile)
+
+### When to Update add-new-website-resources.mdc
+
+Update this file when:
+
+- **New platforms** are actually implemented (not just planned)
+- **Selector strategies** change for existing platforms
+- **Anti-detection measures** are enhanced
+- **Error handling patterns** for new platforms change
+- **Testing procedures** are updated
+- **Common platform patterns** are discovered
+
+## Synchronization Rules
+
+### Cross-Reference Consistency
+
+- **Platform names** must be consistent across all files
+- **Function names** referenced in documentation must match actual code
+- **File paths** must be accurate and use the correct [filename](mdc:filename) format
+- **Environment variables** must be listed consistently
+
+### Version Synchronization
+
+- **Dependencies** in project-overview.mdc must match package.json
+- **Scripts** mentioned must exist in package.json
+- **Configuration options** must reflect actual code implementation
+- **Docker setup** must match actual docker-compose.yml and Dockerfile
+
+### Content Hierarchy
+
+- **project-overview.mdc**: High-level, user-focused, business value
+- **immosearch-structure.mdc**: Technical details, developer-focused, implementation
+- **add-new-website-resources.mdc**: Extension guide, maintainer-focused, patterns
+
+## Update Procedures
+
+### Adding New Dependencies
+
+1. Update [package.json](mdc:package.json)
+2. Update **project-overview.mdc** - Add to "Key Technologies" section
+3. Update **immosearch-structure.mdc** - Add to "Core Technologies" section
+4. Update **add-new-website-resources.mdc** if the dependency affects platform integration
+
+### Adding New Platforms
+
+1. Implement in [check-immo-scout.ts](mdc:check-immo-scout.ts)
+2. Update **project-overview.mdc** - Add to "Multi-Platform Support" and "Key Features"
+3. Update **immosearch-structure.mdc** - Add to "Platform Support" section
+4. Update **add-new-website-resources.mdc** - Add as example implementation
+
+### Adding New Environment Variables
+
+1. Update **project-overview.mdc** - Add to "Environment Variables" section
+2. Update **immosearch-structure.mdc** - Add to "Environment Variables" section
+3. Update **add-new-website-resources.mdc** if it affects platform configuration
+
+### Adding New Scripts
+
+1. Update [package.json](mdc:package.json)
+2. Update **project-overview.mdc** - Add to "Usage Patterns" section
+3. Update **immosearch-structure.mdc** - Add to "Scripts" section
+
+## Content Validation Checklist
+
+### Before Committing Documentation Changes
+
+- [ ] All file references use correct [filename](mdc:filename) format
+- [ ] Function names match actual code implementation
+- [ ] Environment variables are consistent across files
+- [ ] Platform names are spelled consistently
+- [ ] Code examples are syntactically correct
+- [ ] Links to external resources are valid
+- [ ] No duplicate information across files
+- [ ] Each file maintains its distinct purpose and audience
+
+### Content Distribution Guidelines
+
+- **project-overview.mdc**:
+  - What the project does
+  - How to use it
+  - Configuration basics
+  - Key features overview
+- **immosearch-structure.mdc**:
+  - How the code is organized
+  - Development practices
+  - Technical architecture
+  - Deployment details
+- **add-new-website-resources.mdc**:
+  - How to extend the system
+  - Implementation patterns
+  - Testing procedures
+  - Troubleshooting guides
+
+## Maintenance Commands
+
+### Quick Documentation Check
+
+```bash
+# Check for broken file references
+grep -r "mdc:" .cursor/rules/ | grep -v "mdc:"
+
+# Check for inconsistent platform names
+grep -r "ImmoScout\|Kleinanzeigen\|immoscout\|kleinanzeigen" .cursor/rules/
+
+# Check for outdated function references
+grep -r "function.*(" .cursor/rules/ | while read line; do
+  func_name=$(echo $line | sed 's/.*function \([^(]*\).*/\1/')
+  if ! grep -q "$func_name" check-immo-scout.ts; then
+    echo "Missing function: $func_name"
+  fi
+done
+```
+
+### Documentation Update Workflow
+
+1. **Identify change** in code or configuration
+2. **Determine impact** on each documentation file
+3. **Update files** following the hierarchy above
+4. **Validate** using the checklist
+5. **Test** file references and links
+6. **Commit** with descriptive message
+
+## Common Update Patterns
+
+### New Platform Integration
+
+```markdown
+# In project-overview.mdc
+
+- Add to "Multi-Platform Support" section
+- Add to "Key Features" list
+- Add environment variable to "Environment Variables"
+
+# In immosearch-structure.mdc
+
+- Add to "Platform Support" section
+- Update "checkAllServices()" function documentation
+- Add platform-specific error handling patterns
+
+# In add-new-website-resources.mdc
+
+- Add as new section with implementation example
+- Update "Common Platform Patterns" if applicable
+- Add to troubleshooting section if issues arise
+```
+
+### New Feature Addition
+
+```markdown
+# In project-overview.mdc
+
+- Add to "Key Features" section
+- Update "Core Components" if it's a major component
+- Add to "Usage Patterns" if it affects usage
+
+# In immosearch-structure.mdc
+
+- Add to appropriate technical section
+- Update "Development Workflow" if it affects development
+- Add to "Best Practices" if it introduces new patterns
+
+# In add-new-website-resources.mdc
+
+- Add to "Testing New Platforms" if it affects platform integration
+- Update "Best Practices" if it's relevant to extensions
+```
+
+## Quality Standards
+
+### Writing Style
+
+- Use clear, concise language
+- Maintain consistent terminology
+- Include practical examples
+- Provide context for technical decisions
+- Use emojis sparingly and consistently
+
+### Code Examples
+
+- Use actual code from the project when possible
+- Include proper syntax highlighting
+- Show complete, working examples
+- Include error handling where relevant
+- Use realistic variable names
+
+### File References
+
+- Always use the [filename](mdc:filename) format
+- Include line numbers for large files when referencing specific sections
+- Verify that referenced files exist
+- Use relative paths correctly
+
+This rule ensures that all documentation stays current, accurate, and useful for developers working with the ImmoSearch project.
+description:
+globs:
+alwaysApply: true
+
+---

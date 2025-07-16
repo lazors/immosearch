@@ -1,0 +1,65 @@
+# ImmoSearch Project Overview
+
+## Project Purpose
+ImmoSearch is a TypeScript-based automation tool that monitors **ImmoScout24** and **Kleinanzeigen** for new real estate listings and sends notifications to Telegram. It's designed to help users find rental properties by automatically checking for new listings based on their saved search filters. 
+
+## Core Architecture
+
+### Main Entry Points
+- [check-immo-scout.ts](mdc:check-immo-scout.ts) - The primary application file containing all scraping logic
+- [index.ts](mdc:index.ts) - Simple Express server (currently minimal implementation)
+- [package.json](mdc:package.json) - Project dependencies and scripts
+
+### Key Technologies
+- **Playwright** - Web scraping and browser automation
+- **Undici** - HTTP client for API calls
+- **Inquirer** - Interactive command-line prompts
+- **Express** - Web server framework (minimal usage)
+- **TypeScript** - Primary language with ES modules
+
+## Project Structure
+
+### Core Components
+1. **Web Scraping Engine** - Uses Playwright to simulate human browsing behavior
+2. **Multi-Platform Support** - Handles both ImmoScout24 and Kleinanzeigen
+3. **Telegram Integration** - Sends notifications via Telegram Bot API
+4. **Data Persistence** - Tracks seen listings to prevent duplicates
+5. **Configuration Management** - Environment variables and interactive setup
+
+### Key Features
+- 🏠 Multi-platform real estate monitoring
+- 🔍 Configurable search filters via URLs
+- 📱 Telegram notifications for new listings
+- 🤖 Human-like browsing behavior to avoid detection
+- 🔄 Continuous monitoring with configurable intervals
+- 🍪 Automatic cookie consent handling
+- 📝 Separate tracking for each platform
+- 🔧 Interactive configuration mode
+
+## Configuration
+
+### Environment Variables
+- `TELEGRAM_TOKEN` - Bot token from @BotFather
+- `TELEGRAM_CHAT_IDS` - Comma-separated chat IDs
+- `IMMOSCOUT_FILTER_URL` - ImmoScout24 search filter URL
+- `KLEINANZEIGEN_FILTER_URL` - Kleinanzeigen search filter URL
+- `INSTANCE_NAME` - Instance identifier for file naming
+- `DEBUG_TELEGRAM_ID` - Debug chat ID for testing
+
+### Usage Patterns
+- **Interactive Mode**: `npx tsx check-immo-scout.ts --interactive`
+- **Single Run**: `npx tsx check-immo-scout.ts --once`
+- **Custom Config**: `npx tsx check-immo-scout.ts --env .env.custom`
+
+## Data Management
+- Creates `data/` directory for tracking files
+- Separate JSON files for each platform: `{platform}_listings.{instance}.json`
+- Tracks up to 100 seen listings per platform
+- Automatic cleanup of old listings
+
+## Development Guidelines
+- Use TypeScript with ES modules
+- Follow human-like browsing patterns to avoid detection
+- Implement proper error handling and retries
+- Maintain separate tracking for each platform
+- Use environment-based configuration for flexibility

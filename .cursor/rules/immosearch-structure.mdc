@@ -1,0 +1,144 @@
+# ImmoSearch Project Guide
+
+## Project Overview
+ImmoSearch is a TypeScript-based automation tool that monitors **ImmoScout24** and **Kleinanzeigen** for new real estate listings and sends notifications to Telegram. The project uses web scraping with Playwright to simulate human-like browsing behavior.
+
+## Project Architecture
+
+### Core Technologies
+- **TypeScript** with ES2020 modules and strict type checking
+- **Playwright** for web scraping and browser automation
+- **Express.js** for basic HTTP server functionality
+- **Node.js** with ES modules (`"type": "module"`)
+- **Docker** for containerized deployment
+- **Telegram Bot API** for notifications
+
+### Key Files Structure
+- [check-immo-scout.ts](mdc:check-immo-scout.ts) - Main application logic (837 lines)
+- [index.ts](mdc:index.ts) - Basic Express server setup
+- [package.json](mdc:package.json) - Dependencies and scripts
+- [tsconfig.json](mdc:tsconfig.json) - TypeScript configuration
+- [docker-compose.yml](mdc:docker-compose.yml) - Multi-instance Docker setup
+- [Dockerfile](mdc:Dockerfile) - Container configuration
+
+## Development Approach
+
+### 1. Web Scraping Strategy
+- **Human-like behavior simulation**: Random delays, mouse movements, scrolling
+- **Cookie consent handling**: Automatic acceptance for both platforms
+- **Retry mechanisms**: Configurable retry logic with exponential backoff
+- **Multiple selector strategies**: Fallback selectors for robust scraping
+
+### 2. Data Management
+- **JSON-based tracking**: Separate files for each platform and instance
+- **Listing deduplication**: Tracks up to 100 seen listings per platform
+- **Automatic cleanup**: Removes old listings to prevent memory bloat
+- **Instance isolation**: Separate data files for different configurations
+
+### 3. Configuration Management
+- **Environment-based config**: Uses `.env` files for configuration
+- **Interactive mode**: Command-line prompts for easy setup
+- **Multi-instance support**: Different configs for different searches/locations
+- **Validation**: Input validation for URLs and chat IDs
+
+### 4. Deployment Strategy
+- **Docker containerization**: Headless browser setup with Xvfb
+- **Multi-instance deployment**: Separate containers for different configurations
+- **Volume mounting**: Persistent data storage across container restarts
+- **Health monitoring**: Express server for basic health checks
+
+## Key Features Implementation
+
+### Platform Support
+- **ImmoScout24**: Full scraping with cookie handling and listing tracking
+- **Kleinanzeigen**: Robust scraping with multiple selector fallbacks
+- **Cross-platform compatibility**: Unified interface for both platforms
+
+### Telegram Integration
+- **Multi-chat support**: Send notifications to multiple chat IDs
+- **Debug mode**: Separate debug chat for testing
+- **Rich formatting**: Platform-specific emojis and structured messages
+- **Error handling**: Graceful failure handling with user notifications
+
+### Anti-Detection Measures
+- **Human-like delays**: Random intervals between actions
+- **Mouse movement simulation**: Realistic cursor movements
+- **Scroll behavior**: Natural page scrolling patterns
+- **User agent rotation**: Browser fingerprint management
+
+## Development Workflow
+
+### Scripts
+- `npm run dev` - Development with nodemon and tsx
+- `npm run build` - TypeScript compilation
+- `npm start` - Production build execution
+
+### Command Line Options
+- `--interactive` / `-i` - Interactive configuration mode
+- `--once` / `-o` - Single execution mode
+- `--env <file>` - Custom environment file
+- `--explore-all` / `-e` - Explore all result pages
+
+### Environment Variables
+- `TELEGRAM_TOKEN` - Bot authentication
+- `TELEGRAM_CHAT_IDS` - Target chat IDs
+- `IMMOSCOUT_FILTER_URL` - ImmoScout24 search URL
+- `KLEINANZEIGEN_FILTER_URL` - Kleinanzeigen search URL
+- `INSTANCE_NAME` - Instance identifier for file naming
+
+## Code Quality Standards
+
+### TypeScript Configuration
+- **Strict mode**: Enabled for type safety
+- **ES2020 target**: Modern JavaScript features
+- **ES modules**: Native module system
+- **Path resolution**: Node.js module resolution
+
+### Error Handling
+- **Graceful degradation**: Continue operation on partial failures
+- **Retry logic**: Exponential backoff for transient failures
+- **Logging**: Debug logging with file output
+- **User feedback**: Clear error messages and status updates
+
+### Performance Considerations
+- **Resource cleanup**: Proper browser and page cleanup
+- **Memory management**: Limited listing history to prevent bloat
+- **Concurrent operations**: Sequential processing to avoid rate limiting
+- **Efficient selectors**: Optimized CSS selectors for fast scraping
+
+## Deployment Architecture
+
+### Docker Setup
+- **Multi-service**: Separate containers for different instances
+- **Headless browser**: Xvfb virtual display for browser automation
+- **Volume persistence**: Data directory mounting for state preservation
+- **Health monitoring**: Express server on port 4000
+
+### Instance Management
+- **Isolated data**: Separate JSON files per instance
+- **Configurable ports**: Different ports for different instances
+- **Restart policies**: Automatic restart on failure
+- **Resource isolation**: Separate containers prevent interference
+
+## Best Practices Followed
+
+1. **Separation of concerns**: Clear separation between scraping, notification, and configuration logic
+2. **Error resilience**: Comprehensive error handling and recovery mechanisms
+3. **Configuration flexibility**: Support for multiple deployment scenarios
+4. **Human-like behavior**: Anti-detection measures for sustainable scraping
+5. **Data persistence**: Reliable state management across restarts
+6. **Monitoring**: Built-in logging and health check endpoints
+7. **Scalability**: Multi-instance support for different use cases
+
+## Future Considerations
+
+- **Rate limiting**: Implement adaptive delays based on response times
+- **Proxy support**: Add proxy rotation for IP diversity
+- **Database integration**: Replace JSON files with proper database
+- **API endpoints**: Expand Express server for configuration management
+- **Metrics collection**: Add performance and success rate monitoring
+- **Web interface**: Admin panel for configuration and monitoring
+description:
+globs:
+alwaysApply: false
+---

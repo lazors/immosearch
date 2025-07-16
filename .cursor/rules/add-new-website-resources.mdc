@@ -1,0 +1,352 @@
+# Adding New Website Resources for Real Estate Monitoring
+
+## Overview
+This guide provides step-by-step instructions for adding new real estate websites to the ImmoSearch monitoring system. The project currently supports ImmoScout24 and Kleinanzeigen, and this guide shows how to extend it to support additional platforms.
+
+## Architecture Understanding
+
+### Current Platform Structure
+The main application [check-immo-scout.ts](mdc:check-immo-scout.ts) follows a modular approach where each platform has:
+- **Cookie consent handling** - `handle{Platform}CookieConsent()`
+- **Listing extraction** - `check{Platform}Listings()`
+- **Platform-specific selectors** - CSS selectors for listing elements
+- **Data tracking** - Separate JSON files per platform
+
+### Key Integration Points
+- **Configuration**: Add new environment variable for filter URL
+- **Main loop**: Add platform check in `checkAllServices()`
+- **Data management**: Use `getServiceSpecificFile()` for tracking
+- **Telegram notifications**: Platform-specific emoji and formatting
+
+## Step-by-Step Implementation Guide
+
+### 1. Environment Configuration
+Add new environment variable for the platform:
+```typescript
+// In getConfiguration() function
+let newPlatformFilterUrl: string = '';
+
+// Add to interactive prompts
+const newPlatformAnswer = await inquirer.prompt([
+  {
+    type: 'input',
+    name: 'filterUrl',
+    message: 'Enter NewPlatform filter URL (leave empty to skip):',
+    validate: (input: string) =>
+      !input || validateUrl(input) || 'Please enter a valid URL or leave empty',
+    default: process.env.NEWPLATFORM_FILTER_URL || '',
+  },
+]);
+```
+
+### 2. Cookie Consent Handling
+Create a function to handle platform-specific cookie consent:
+```typescript
+async function handleNewPlatformCookieConsent(page: any) {
+  try {
+    // Common cookie consent selectors to try
+    const cookieSelectors = [
+      'button[data-testid="cookie-accept"]',
+      'button:contains("Accept")',
+      'button:contains("Accept All")',
+      'button:contains("Zustimmen")',
+      '.cookie-accept',
+      '#cookie-accept'
+    ];
+    
+    for (const selector of cookieSelectors) {
+      try {
+        await page.waitForSelector(selector, { timeout: 3000 });
+        await page.click(selector);
+        console.log('✅ Cookie consent handled for NewPlatform');
+        return;
+      } catch (e) {
+        // Continue to next selector
+      }
+    }
+    console.log('ℹ️ No cookie consent found for NewPlatform');
+  } catch (error) {
+    console.log('⚠️ Error handling cookie consent for NewPlatform:', error.message);
+  }
+}
+```
+
+### 3. Listing Extraction Function
+Create the main scraping function following the existing pattern:
+```typescript
+async function checkNewPlatformListings(page: any): Promise<string[]> {
+  const newListings: string[] = [];
+  
+  try {
+    console.log('🔍 Checking NewPlatform listings...');
+    
+    // Navigate to the filter URL
+    await page.goto(NEWPLATFORM_FILTER_URL, { waitUntil: 'networkidle' });
+    await randomDelay(2000, 4000);
+    
+    // Handle cookie consent
+    await handleNewPlatformCookieConsent(page);
+    
+    // Wait for listings to load
+    await page.waitForSelector('.listing-item', { timeout: 10000 });
+    
+    // Extract listing data
+    const listings = await page.$$eval('.listing-item', (elements) => {
+      return elements.map((el) => {
+        const id = el.getAttribute('data-listing-id') || 
+                  el.querySelector('[data-id]')?.getAttribute('data-id') ||
+                  Math.random().toString(36).substr(2, 9);
+        
+        const title = el.querySelector('.listing-title')?.textContent?.trim() ||
+                     el.querySelector('h2, h3')?.textContent?.trim() ||
+                     'No title';
+        
+        const price = el.querySelector('.price')?.textContent?.trim() ||
+                     el.querySelector('[class*="price"]')?.textContent?.trim() ||
+                     'Price not available';
+        
+        const location = el.querySelector('.location')?.textContent?.trim() ||
+                        el.querySelector('[class*="location"]')?.textContent?.trim() ||
+                        'Location not available';
+        
+        const link = el.querySelector('a')?.href || '';
+        
+        return {
+          id,
+          title,
+          price,
+          location,
+          link,
+          platform: 'newplatform'
+        };
+      });
+    });
+    
+    // Process new listings
+    const seenListings = loadSeenListings('newplatform');
+    
+    for (const listing of listings) {
+      if (!seenListings.has(listing.id)) {
+        seenListings.set(listing.id, listing);
+        newListings.push(listing);
+        
+        // Send Telegram notification
+        const message = `🏠 **NewPlatform** - New Listing Found!\n\n` +
+                       `📍 **${listing.title}**\n` +
+                       `💰 ${listing.price}\n` +
+                       `📍 ${listing.location}\n` +
+                       `🔗 [View Listing](${listing.link})`;
+        
+        for (const chatId of TELEGRAM_CHAT_IDS) {
+          await sendTelegramMessage(message, chatId);
+        }
+      }
+    }
+    
+    // Save updated seen listings
+    saveSeenListings('newplatform', seenListings);
+    
+    console.log(`✅ NewPlatform: Found ${newListings.length} new listings`);
+    return newListings.map(l => l.id);
+    
+  } catch (error) {
+    console.error('❌ Error checking NewPlatform listings:', error);
+    return [];
+  }
+}
+```
+
+### 4. Integration into Main Loop
+Add the new platform to the `checkAllServices()` function:
+```typescript
+async function checkAllServices() {
+  const browser = await getBrowser();
+  
+  try {
+    const page = await initializePage(browser);
+    
+    // Check ImmoScout24
+    if (IMMOSCOUT_FILTER_URL) {
+      await checkImmoScoutListings(page);
+      await randomDelay(3000, 6000);
+    }
+    
+    // Check Kleinanzeigen
+    if (KLEINANZEIGEN_FILTER_URL) {
+      await checkKleinanzeigenListings(page);
+      await randomDelay(3000, 6000);
+    }
+    
+    // Check NewPlatform
+    if (NEWPLATFORM_FILTER_URL) {
+      await checkNewPlatformListings(page);
+      await randomDelay(3000, 6000);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in checkAllServices:', error);
+  } finally {
+    await browser.close();
+  }
+}
+```
+
+### 5. Configuration Validation
+Update the validation logic in `getConfiguration()`:
+```typescript
+// Validate required values
+if (!immoscoutFilterUrl && !kleinanzeigenFilterUrl && !newPlatformFilterUrl) {
+  console.error(
+    '❌ At least one filter URL (ImmoScout24, Kleinanzeigen, or NewPlatform) is required'
+  );
+  process.exit(1);
+}
+```
+
+## Platform-Specific Considerations
+
+### Selector Strategy
+When implementing for a new platform, consider these selector patterns:
+```typescript
+// Common listing container selectors
+const listingSelectors = [
+  '.listing-item',
+  '.property-item',
+  '.ad-item',
+  '[data-testid="listing"]',
+  '.search-result-item'
+];
+
+// Common data extraction selectors
+const titleSelectors = [
+  '.listing-title',
+  '.property-title',
+  'h2, h3',
+  '[class*="title"]'
+];
+
+const priceSelectors = [
+  '.price',
+  '.property-price',
+  '[class*="price"]',
+  '[data-testid="price"]'
+];
+```
+
+### Anti-Detection Measures
+Implement human-like behavior:
+```typescript
+// Add to the listing extraction function
+await humanLikeScroll(page);
+await humanLikeMouseMovement(page);
+await randomDelay(1000, 3000);
+```
+
+### Error Handling
+Follow the existing error handling pattern:
+```typescript
+try {
+  // Platform-specific logic
+} catch (error) {
+  console.error(`❌ Error checking ${platformName} listings:`, error);
+  // Send error notification if needed
+  await sendTelegramMessage(`⚠️ Error checking ${platformName}: ${error.message}`);
+  return [];
+}
+```
+
+## Testing New Platforms
+
+### Development Testing
+1. **Single run testing**: `npx tsx check-immo-scout.ts --once --env .env.test`
+2. **Interactive mode**: `npx tsx check-immo-scout.ts --interactive`
+3. **Debug logging**: Check `debug.{instance}.log` for detailed output
+
+### Validation Checklist
+- [ ] Cookie consent handling works
+- [ ] Listings are properly extracted
+- [ ] Duplicate detection works
+- [ ] Telegram notifications are sent
+- [ ] Error handling is robust
+- [ ] Human-like behavior is implemented
+
+## Common Platform Patterns
+
+### German Real Estate Sites
+- **Cookie consent**: Often uses "Zustimmen", "Accept", "Alle akzeptieren"
+- **Price format**: Usually "€X,XXX" or "X.XXX €"
+- **Location format**: City names, postal codes, or district names
+
+### International Sites
+- **Currency symbols**: $, £, €, etc.
+- **Date formats**: Various international formats
+- **Language considerations**: May need language-specific selectors
+
+## Best Practices
+
+### 1. Robust Selectors
+Use multiple fallback selectors:
+```typescript
+const getElementText = async (page: any, selectors: string[]) => {
+  for (const selector of selectors) {
+    try {
+      const element = await page.$(selector);
+      if (element) {
+        return await element.textContent();
+      }
+    } catch (e) {
+      // Continue to next selector
+    }
+  }
+  return null;
+};
+```
+
+### 2. Rate Limiting
+Implement appropriate delays:
+```typescript
+// Platform-specific delays
+const PLATFORM_DELAYS = {
+  immoscout: { min: 2000, max: 4000 },
+  kleinanzeigen: { min: 1500, max: 3000 },
+  newplatform: { min: 3000, max: 5000 } // More conservative for new platforms
+};
+```
+
+### 3. Data Validation
+Validate extracted data:
+```typescript
+const validateListing = (listing: any) => {
+  return listing.id && 
+         listing.title && 
+         listing.link && 
+         listing.title.length > 0 &&
+         listing.link.startsWith('http');
+};
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Selectors not working**: Use browser dev tools to inspect elements
+2. **Cookie consent not handled**: Add more selector variations
+3. **Rate limiting**: Increase delays between requests
+4. **Captcha detection**: Implement captcha handling or increase delays
+
+### Debug Tools
+- Use `page.screenshot()` to capture page state
+- Add `console.log()` statements for debugging
+- Check network tab in browser dev tools
+- Use `page.waitForSelector()` with longer timeouts
+
+## Example Implementation
+
+See the existing implementations in [check-immo-scout.ts](mdc:check-immo-scout.ts):
+- **ImmoScout24**: Lines 445-517
+- **Kleinanzeigen**: Lines 551-678
+
+These serve as reference implementations for adding new platforms following the same patterns and conventions.
+description:
+globs:
+alwaysApply: false
+---
